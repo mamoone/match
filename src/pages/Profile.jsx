@@ -17,7 +17,8 @@ export default function Profile() {
 
   useEffect(() => {
     if (profile) setForm({ ...profile })
-  }, [profile])
+    else if (session?.user?.id) fetchProfile(session.user.id)
+  }, [profile, session?.user?.id])
 
   function update(field, val) { setForm(p => ({ ...p, [field]: val })) }
 
