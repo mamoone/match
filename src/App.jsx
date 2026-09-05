@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { supabase } from './utils/supabase'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { supabase, isSupabaseConfigured } from './utils/supabase'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
@@ -28,6 +28,11 @@ export default function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      setLoading(false)
+      return
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) fetchProfile(session.user.id)
@@ -57,7 +62,7 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={{ session, profile, loading, signOut, fetchProfile }}>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
           <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" />} />
@@ -67,7 +72,23 @@ export default function App() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
+      {!isSupabaseConfigured() && <ConfigWarning />}
     </AuthContext.Provider>
+  )
+}
+
+function ConfigWarning() {
+  return (
+    <div className="config-warning">
+      <span className="logo-icon">⚓</span>
+      <h2>Configuration requise</h2>
+      <p>
+        L'application est en ligne mais le backend Supabase n'est pas encore connecté.
+        Ajoutez les secrets GitHub <strong>VITE_SUPABASE_URL</strong> et <strong>VITE_SUPABASE_ANON_KEY</strong>,
+        puis relancez le workflow <em>Deploy to GitHub Pages</em>.
+      </p>
+      <a className="btn-primary" href="https://github.com/mamoone/match/settings/secrets/actions" target="_blank" rel="noreferrer">Configurer les secrets</a>
+    </div>
   )
 }
