@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  AppBar, Toolbar, Box, Container, Typography, Button, Chip, Grid, Paper,
+  AppBar, Toolbar, Box, Container, Typography, Button, Chip, Paper,
   Tabs, Tab, Table, TableBody, TableCell, TableHead, TableRow, IconButton,
-  Avatar, Alert, Snackbar, Stack, TextField, MenuItem, Select, InputLabel,
-  FormControl, Fab,
+  Avatar, Alert, Snackbar, Stack, TextField, Select, InputLabel,
+  FormControl, InputAdornment,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import BlockIcon from '@mui/icons-material/Block'
@@ -12,9 +12,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import SettingsIcon from '@mui/icons-material/Settings'
+import PaymentsIcon from '@mui/icons-material/Payments'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
-import { ROLE_BADGES, PAYMENT_STATUS_LABELS, CURRENCY, SPECIALTY_LABELS } from '../utils/constants'
+import { ROLE_BADGES, COLLECTION_TOTAL, CURRENCY, SPECIALTY_LABELS } from '../utils/constants'
 import { fetchConfig, saveConfig } from '../utils/config'
 
 export default function Admin() {
@@ -22,17 +23,16 @@ export default function Admin() {
   const [tab, setTab] = useState('users')
   const [users, setUsers] = useState([])
   const [offers, setOffers] = useState([])
-  const [payments, setPayments] = useState([])
   const [stats, setStats] = useState({})
   const [toast, setToast] = useState('')
   const [toastOk, setToastOk] = useState(true)
 
   useEffect(() => {
-    refreshAll()
+    refresh()
   }, [])
 
-  async function refreshAll() {
-    await Promise.all([fetchStats(), fetchUsers(), fetchOffers(), fetchPayments()])
+  async function refresh() {
+    await Promise.all([fetchStats(), fetchUsers(), fetchOffers()])
   }
 
   function notify(msg, ok = true) { setToast(msg); setToastOk(ok) }
@@ -63,14 +63,6 @@ export default function Admin() {
     setOffers(data || [])
   }
 
-  async function fetchPayments() {
-    const { data } = await supabase
-      .from('payments')
-      .select('*, profiles(full_name, company_name)')
-      .order('month', { ascending: false })
-    setPayments(data || [])
-  }
-
   async function toggleBan(userId, currentBanned) {
     const { error } = await supabase.from('profiles').update({ banned: !currentBanned }).eq('id', userId)
     if (error) notify(error.message, false)
@@ -83,21 +75,6 @@ export default function Admin() {
     notify('تم حذف العرض')
     fetchOffers(); fetchStats()
   }
-
-  async function setPaymentStatus(paymentId, status) {
-    await supabase.from('payments').update({ status }).eq('id', paymentId)
-    notify(status === 'paid' ? 'تم تأكيد الأداء ✓' : 'تم تغيير الحالة')
-    fetchPayments()
-  }
-
-  async function deletePayment(paymentId) {
-    await supabase.from('payments').delete().eq('id', paymentId)
-    notify('تم حذف القسط')
-    fetchPayments()
-  }
-
-  const pendingTotal = payments.filter(p => p.status === 'pending').reduce((s, p) => s + Number(p.amount_mad || 0), 0)
-  const paidTotal = payments.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount_mad || 0), 0)
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -126,7 +103,7 @@ export default function Admin() {
             <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" scrollButtons="auto" textColor="primary" indicatorColor="primary">
               <Tab label={`المستخدمون (${users.length})`} value="users" />
               <Tab label={`العروض (${offers.length})`} value="offers" />
-              <Tab label={`المدفوعات (${payments.length})`} value="payments" />
+              <Tab icon={<PaymentsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="التحصيل" value="collections" />
               <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="الإعدادات" value="config" />
             </Tabs>
           </Paper>
@@ -226,7 +203,7 @@ export default function Admin() {
             </Paper>
           )}
 
-          {tab === 'payments' && <PaymentsTab payments={payments} pendingTotal={pendingTotal} paidTotal={paidTotal} users={users} setPaymentStatus={setPaymentStatus} deletePayment={deletePayment} onSaved={fetchPayments} notify={notify} />}
+          {tab === 'collections' && <CollectionsTab notify={notify} />}
 
           {tab === 'config' && <ConfigTab notify={notify} />}
         </Box>
@@ -251,123 +228,137 @@ function StatCard({ icon, label, value }) {
   )
 }
 
-function PaymentsTab({ payments, pendingTotal, paidTotal, users, setPaymentStatus, deletePayment, onSaved, notify }) {
-  const captains = users.filter(u => u.role === 'capitaine')
-  const [form, setForm] = useState({ profile_id: '', month: '', amount_mad: '', note: '' })
-  const [saving, setSaving] = useState(false)
+const COLLECTION_QUERY = `
+  *, job_offers(title, location, specialty_needed),
+  captain:profiles!collections_captain_id_fkey(full_name, company_name),
+  sailor:profiles!collections_sailor_id_fkey(full_name)
+`
 
-  async function addPayment(e) {
-    e.preventDefault()
-    if (!form.profile_id || !form.month || !form.amount_mad) { notify('أكمل الحقول المطلوبة', false); return }
-    setSaving(true)
-    const { error } = await supabase.from('payments').insert({
-      profile_id: form.profile_id,
-      month: `${form.month}-01`,
-      amount_mad: Number(form.amount_mad),
-      status: 'pending',
-      note: form.note,
-    })
-    setSaving(false)
-    if (error) { notify(error.message, false); return }
-    setForm({ profile_id: '', month: '', amount_mad: '', note: '' })
-    notify('تمت إضافة القسط ✓')
-    onSaved()
+function CollectionsTab({ notify }) {
+  const [rows, setRows] = useState([])
+  const [payments, setPayments] = useState({}) // rowId -> amount to register
+
+  async function fetchRows() {
+    const { data } = await supabase
+      .from('collections')
+      .select(COLLECTION_QUERY)
+      .order('created_at', { ascending: false })
+    setRows(data || [])
   }
+
+  useEffect(() => { fetchRows() }, [])
+
+  async function registerPayment(rowId) {
+    const amount = Number(payments[rowId] || 0)
+    if (!amount || amount <= 0) { notify('أدخل المبلغ المستلم', false); return }
+    const row = rows.find(r => r.id === rowId)
+    const received = Number(row.received_mad) + amount
+    const { error } = await supabase
+      .from('collections')
+      .update({ received_mad: received, status: received >= Number(row.total_mad) ? 'ok' : 'pending' })
+      .eq('id', rowId)
+    if (error) { notify(error.message, false); return }
+    setPayments(p => ({ ...p, [rowId]: '' }))
+    notify(`تم تسجيل استلام ${amount} ${CURRENCY} ✓`)
+    fetchRows()
+  }
+
+  async function completeCollection(rowId) {
+    const row = rows.find(r => r.id === rowId)
+    await supabase
+      .from('collections')
+      .update({ received_mad: row.total_mad, status: 'ok' })
+      .eq('id', rowId)
+    notify('تم تأكيد التسليم الكامل ✓')
+    fetchRows()
+  }
+
+  const total = rows.reduce((s, r) => s + Number(r.total_mad || 0), 0)
+  const received = rows.reduce((s, r) => s + Number(r.received_mad || 0), 0)
 
   return (
     <Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(2, 1fr)' }, gap: 2, mb: 3 }}>
-        <StatCard icon="⏳" label={`غير مؤدى (${CURRENCY})`} value={pendingTotal} />
-        <StatCard icon="✅" label={`مؤدى (${CURRENCY})`} value={paidTotal} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2, mb: 3 }}>
+        <StatCard icon="⏳" label={`مطلوب التحصيل (${CURRENCY})`} value={total - received} />
+        <StatCard icon="✅" label={`تم استلامه (${CURRENCY})`} value={received} />
       </Box>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>إضافة قسط شهري</Typography>
-        <Stack component="form" spacing={2} onSubmit={addPayment} direction={{ xs: 'column', sm: 'row' }} sx={{ flexWrap: 'wrap', gap: 2, '& .MuiFormControl-root': { flex: '1 1 180px' } }}>
-          <FormControl size="small">
-            <InputLabel>الربان</InputLabel>
-            <Select
-              value={form.profile_id}
-              onChange={e => setForm(p => ({ ...p, profile_id: e.target.value }))}
-              label="الربان"
-              required
-            >
-              {captains.map(c => (
-                <MenuItem key={c.id} value={c.id}>{c.full_name} {c.company_name ? `(${c.company_name})` : ''}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="الشهر"
-            type="month"
-            value={form.month}
-            onChange={e => setForm(p => ({ ...p, month: e.target.value }))}
-            slotProps={{ inputLabel: { shrink: true } }}
-            required
-          />
-          <TextField
-            size="small"
-            label={`المبلغ (${CURRENCY})`}
-            type="number"
-            value={form.amount_mad}
-            onChange={e => setForm(p => ({ ...p, amount_mad: e.target.value }))}
-            inputProps={{ min: 0 }}
-            required
-          />
-          <TextField
-            size="small"
-            label="ملاحظة"
-            value={form.note}
-            onChange={e => setForm(p => ({ ...p, note: e.target.value }))}
-          />
-          <Button type="submit" variant="contained" disabled={saving} startIcon={<AddIcon />}>
-            {saving ? '...' : 'إضافة'}
-          </Button>
-        </Stack>
+      <Paper sx={{ px: 3, py: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <PaymentsIcon color="warning" />
+        <Typography fontSize={14} color="text.secondary">
+          كل مهمة مكتملة = <b>{COLLECTION_TOTAL} {CURRENCY}</b> (50 من الربان + 50 من البحار) — يتحصّلها الربان ويسلمها لك. سجل ما استلمته واطلع على المتبقي.
+        </Typography>
       </Paper>
 
       <Paper sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell>العرض</TableCell>
               <TableCell>الربان</TableCell>
-              <TableCell>الشهر</TableCell>
-              <TableCell>المبلغ ({CURRENCY})</TableCell>
+              <TableCell>البحار</TableCell>
+              <TableCell>المجموع</TableCell>
+              <TableCell>المستلم</TableCell>
+              <TableCell>المتبقي</TableCell>
               <TableCell>الحالة</TableCell>
-              <TableCell>ملاحظة</TableCell>
-              <TableCell align="left">إجراء</TableCell>
+              <TableCell align="left">تسجيل الاستلام</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {payments.length === 0 && (
-              <TableRow><TableCell colSpan={6}><Typography color="text.secondary" textAlign="center" sx={{ py: 3 }}>لا توجد مدفوعات بعد.</Typography></TableCell></TableRow>
-            )}
-            {payments.map(p => (
-              <TableRow key={p.id} hover sx={{ opacity: p.status === 'paid' ? 0.7 : 1 }}>
-                <TableCell><Typography fontWeight={600}>{p.profiles?.full_name || '-'}</Typography></TableCell>
-                <TableCell>{new Date(p.month).toLocaleDateString('ar', { month: 'long', year: 'numeric' })}</TableCell>
-                <TableCell>{p.amount_mad} {CURRENCY}</TableCell>
-                <TableCell>
-                  <Chip size="small" color={p.status === 'paid' ? 'success' : 'warning'} label={PAYMENT_STATUS_LABELS[p.status]} variant="outlined" />
-                </TableCell>
-                <TableCell>{p.note || '-'}</TableCell>
-                <TableCell align="left" sx={{ whiteSpace: 'nowrap' }}>
-                  <Button
-                    size="small"
-                    color={p.status === 'paid' ? 'warning' : 'success'}
-                    variant="outlined"
-                    onClick={() => setPaymentStatus(p.id, p.status === 'paid' ? 'pending' : 'paid')}
-                    sx={{ mr: 1 }}
-                  >
-                    {p.status === 'paid' ? 'إلغاء الأداء' : 'تأكيد الأداء'}
-                  </Button>
-                  <IconButton size="small" color="error" onClick={() => deletePayment(p.id)} aria-label="حذف">
-                    <DeleteIcon />
-                  </IconButton>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8}>
+                  <Typography color="text.secondary" textAlign="center" sx={{ py: 3 }}>
+                    لا توجد مهام مكتملة — سيظهر التحصيل تلقائياً بعد اختيار الربان لبحار.
+                  </Typography>
                 </TableCell>
               </TableRow>
-            ))}
+            )}
+            {rows.map(r => {
+              const remaining = Math.max(Number(r.total_mad || 0) - Number(r.received_mad || 0), 0)
+              const done = Number(r.received_mad || 0) >= Number(r.total_mad || 0)
+              return (
+                <TableRow key={r.id} hover sx={{ opacity: done ? 0.7 : 1 }}>
+                  <TableCell>
+                    <Typography fontWeight={600} fontSize={14}>{r.job_offers?.title}</Typography>
+                    <Typography fontSize={12} color="text.secondary">📍 {r.job_offers?.location}</Typography>
+                  </TableCell>
+                  <TableCell>{r.captain?.company_name || r.captain?.full_name || '-'}</TableCell>
+                  <TableCell>{r.sailor?.full_name || '-'}</TableCell>
+                  <TableCell>{r.total_mad} {CURRENCY}</TableCell>
+                  <TableCell>
+                    <b style={{ color: '#34d399' }}>{r.received_mad} {CURRENCY}</b>
+                  </TableCell>
+                  <TableCell>
+                    <b style={{ color: done ? '#34d399' : '#f87171' }}>{remaining} {CURRENCY}</b>
+                  </TableCell>
+                  <TableCell>
+                    <Chip size="small" color={done ? 'success' : 'warning'} label={done ? 'مكتمل' : 'قيد التحصيل'} variant="outlined" />
+                  </TableCell>
+                  <TableCell align="left">
+                    {!done && (
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          type="number"
+                          placeholder="المبلغ"
+                          inputProps={{ min: 0 }}
+                          value={payments[r.id] || ''}
+                          onChange={e => setPayments(p => ({ ...p, [r.id]: e.target.value }))}
+                          sx={{ width: 110 }}
+                        />
+                        <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => registerPayment(r.id)}>
+                          سجل
+                        </Button>
+                        <Button size="small" variant="outlined" color="success" onClick={() => completeCollection(r.id)}>
+                          تسليم كامل
+                        </Button>
+                      </Stack>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </Paper>
@@ -451,12 +442,7 @@ function Editor({ title, items, onRemove, addValue, setAddValue, onAdd, saving, 
       </Stack>
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
         {items.map((item, i) => (
-          <Chip
-            key={`${item}-${i}`}
-            label={item}
-            onDelete={() => onRemove(i)}
-            sx={{ fontSize: 13 }}
-          />
+          <Chip key={`${item}-${i}`} label={item} onDelete={() => onRemove(i)} sx={{ fontSize: 13 }} />
         ))}
         {items.length === 0 && (
           <Typography color="text.secondary" fontSize={13}>القائمة فارغة.</Typography>

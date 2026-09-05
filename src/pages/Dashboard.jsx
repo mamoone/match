@@ -13,10 +13,11 @@ import AssignmentIcon from '@mui/icons-material/Assignment'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import PersonIcon from '@mui/icons-material/Person'
 import FmdGoodIcon from '@mui/icons-material/FmdGood'
+import DateRangeIcon from '@mui/icons-material/DateRange'
 import PaymentsIcon from '@mui/icons-material/Payments'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
-import { SPECIALTY_LABELS, PAYMENT_STATUS_LABELS, CURRENCY } from '../utils/constants'
+import { SPECIALTY_LABELS, COLLECTION_TOTAL, CURRENCY } from '../utils/constants'
 
 const POLL_MS = 15000
 
@@ -72,10 +73,10 @@ export default function Dashboard() {
   const fetchPayments = useCallback(async () => {
     if (profile?.role !== 'capitaine') return
     const { data } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('profile_id', session.user.id)
-      .order('month', { ascending: false })
+      .from('collections')
+      .select('*, job_offers(title, location), sailor:profiles!collections_sailor_id_fkey(full_name)')
+      .eq('captain_id', session.user.id)
+      .order('created_at', { ascending: false })
     setPayments(data || [])
   }, [session?.user?.id, profile?.role])
 
@@ -168,8 +169,8 @@ export default function Dashboard() {
     : offers
 
   const canPost = profile?.role === 'capitaine'
-  const lastPayment = payments[0] || null
-  const pendingCount = payments.filter(p => p.status === 'pending').length
+  const totalDue = payments.reduce((s, p) => s + Number(p.total_mad || 0), 0)
+  const totalReceived = payments.reduce((s, p) => s + Number(p.received_mad || 0), 0)
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -286,8 +287,8 @@ export default function Dashboard() {
           </Paper>
 
           {canPost && (
-            <PaymentPanel payments={payments} lastPayment={lastPayment} pendingCount={pendingCount} />
-          )}
+              <CollectionsPanel payments={payments} totalDue={totalDue} totalReceived={totalReceived} />
+            )}
 
           {isMarin ? (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
@@ -404,40 +405,87 @@ export default function Dashboard() {
   )
 }
 
-function PaymentPanel({ payments, lastPayment, pendingCount }) {
+function CollectionsPanel({ payments, totalDue, totalReceived }) {
+  const remaining = Math.max(totalDue - totalReceived, 0)
   return (
     <Paper
       sx={{
         p: 2,
         mb: 3,
         borderRadius: 2,
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 2,
-        alignItems: 'center',
         border: '1px solid rgba(245,158,11,.25)',
       }}
     >
-      <PaymentsIcon sx={{ color: 'warning.main' }} />
-      <Box sx={{ flexGrow: 1, minWidth: 200 }}>
-        <Typography fontWeight={700}>اشتراكي الشهري</Typography>
-        {lastPayment ? (
-          <Typography color="text.secondary" fontSize={13}>
-            {new Date(lastPayment.month).toLocaleDateString('ar', { month: 'long', year: 'numeric' })} —{' '}
-            {lastPayment.amount_mad} {CURRENCY} ·{' '}
-            <Chip
-              size="small"
-              color={lastPayment.status === 'paid' ? 'success' : 'warning'}
-              label={PAYMENT_STATUS_LABELS[lastPayment.status]}
-              sx={{ height: 20, fontSize: 11, mx: 0.5 }}
-            />
-          </Typography>
-        ) : (
-          <Typography color="text.secondary" fontSize={13}>لا توجد مدفوعات مسجلة بعد.</Typography>
-        )}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 1.5 }}>
+        <PaymentsIcon sx={{ color: 'warning.main' }} />
+        <Typography fontWeight={700}>وضعية التحصيل (100 {CURRENCY} لكل مهمة)</Typography>
       </Box>
-      <Chip label={`مبالغ غير مؤداة: ${pendingCount}`} color={pendingCount ? 'warning' : 'success'} variant="outlined" size="small" />
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3, 1fr)', sm: 'repeat(3, 1fr)' }, gap: 1.5, mb: 1.5 }}>
+        <MiniStat label="الإجمالي" value={`${totalDue} ${CURRENCY}`} color="#94a3b8" />
+        <MiniStat label="المُستلم" value={`${totalReceived} ${CURRENCY}`} color="#34d399" />
+        <MiniStat label="المتبقي" value={`${remaining} ${CURRENCY}`} color={remaining > 0 ? '#f87171' : '#34d399'} />
+      </Box>
+
+      {payments.length === 0 ? (
+        <Typography color="text.secondary" fontSize={13}>
+          لا توجد مهام مكتملة بعد — بمجرد اختيارك لبحار ستحتاج تحصيل 100 {CURRENCY} وتسليمها للإدارة.
+        </Typography>
+      ) : (
+        <Stack spacing={1}>
+          {payments.map(p => {
+            const due = Number(p.total_mad || 0)
+            const got = Number(p.received_mad || 0)
+            const done = got >= due
+            return (
+              <Box
+                key={p.id}
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                  alignItems: 'center',
+                  bgcolor: 'rgba(15,23,42,.6)',
+                  borderRadius: 1.5,
+                  p: 1.5,
+                }}
+              >
+                <Box sx={{ flexGrow: 1, minWidth: 180 }}>
+                  <Typography fontWeight={600} fontSize={14}>{p.job_offers?.title}</Typography>
+                  <Typography fontSize={12} color="text.secondary">
+                    البحار: {p.sailor?.full_name || '-'} · 📍 {p.job_offers?.location}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={done ? 'success' : 'warning'}
+                  label={done ? 'سُلّم كاملاً ✓' : `المتبقي ${due - got} ${CURRENCY}`}
+                  variant="outlined"
+                />
+              </Box>
+            )
+          })}
+        </Stack>
+      )}
     </Paper>
+  )
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <Box sx={{ bgcolor: 'rgba(15,23,42,.6)', borderRadius: 1.5, p: 1.2, textAlign: 'center' }}>
+      <Typography variant="caption" color="text.secondary" display="block">{label}</Typography>
+      <Typography fontWeight={800} fontSize={17} sx={{ color }}>{value}</Typography>
+    </Box>
+  )
+}
+
+function InfoRow({ icon, children }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+      <Box sx={{ display: 'flex', minWidth: 20, justifyContent: 'center' }}>{icon}</Box>
+      <Box sx={{ lineHeight: 1.5 }}>{children}</Box>
+    </Box>
   )
 }
 
@@ -477,13 +525,17 @@ function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
       <Typography variant="h6">{offer.title}</Typography>
       <Typography color="text.secondary" fontSize={13}>⛴️ {company}</Typography>
 
-      <Stack spacing={0.4} sx={{ fontSize: 13, color: 'text.secondary' }}>
-        <Box>
-          📍 {offer.location}
-          {offer.inCity && <Chip size="small" color="primary" label="مدينتك" sx={{ ml: 1, height: 20, fontSize: 11 }} />}
-        </Box>
-        <Box>📅 {offer.start_date} ← {offer.end_date}</Box>
-        <Box>💰 {offer.daily_rate ? `${offer.daily_rate} ${CURRENCY}/يوم` : 'قابل للتفاوض'}</Box>
+      <Stack spacing={0.8} sx={{ fontSize: 13, color: 'text.secondary' }}>
+        <InfoRow icon={<FmdGoodIcon sx={{ fontSize: 17 }} />}>
+          {offer.location}
+          {offer.inCity && <Chip size="small" color="primary" label="مدينتك" sx={{ mr: 1, height: 20, fontSize: 11 }} />}
+        </InfoRow>
+        <InfoRow icon={<DateRangeIcon sx={{ fontSize: 17 }} />}>
+          {offer.start_date} ← {offer.end_date}
+        </InfoRow>
+        <InfoRow icon={<PaymentsIcon sx={{ fontSize: 17 }} />}>
+          {offer.daily_rate ? `${offer.daily_rate} ${CURRENCY}/يوم` : 'قابل للتفاوض'}
+        </InfoRow>
       </Stack>
 
       <Typography color="text.secondary" fontSize={13} sx={{ opacity: 0.85 }}>

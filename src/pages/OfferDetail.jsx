@@ -7,9 +7,13 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import PhoneIcon from '@mui/icons-material/Phone'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import FmdGoodIcon from '@mui/icons-material/FmdGood'
+import DateRangeIcon from '@mui/icons-material/DateRange'
+import PaymentsIcon from '@mui/icons-material/Payments'
+import DirectionsBoatIcon from '@mui/icons-material/DirectionsBoat'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
-import { SPECIALTY_LABELS, CURRENCY } from '../utils/constants'
+import { SPECIALTY_LABELS, COLLECTION_TOTAL, CURRENCY } from '../utils/constants'
 
 export default function OfferDetail() {
   const { id } = useParams()
@@ -55,7 +59,7 @@ export default function OfferDetail() {
       type: 'accepted',
       offer_id: id,
     })
-    setToast('تم اختيار البحار. تم إبلاغ البقية.')
+    setToast(`تم اختيار البحار ✓ — تحصّل ${COLLECTION_TOTAL} ${CURRENCY} (50 من التاجر + 50 من البحار) وأدِّها للإدارة.`)
     fetchOffer()
   }
 
@@ -98,17 +102,17 @@ export default function OfferDetail() {
               <Typography color="text.secondary">⛴️ {company}</Typography>
 
               <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon="📍" label="الميناء" value={offer.location} />
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <InfoTile icon={<FmdGoodIcon sx={{ fontSize: 22, color: 'primary.main' }} />} label="الميناء" value={offer.location} />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon="📅" label="الفترة" value={`${offer.start_date} ← ${offer.end_date}`} />
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <InfoTile icon={<DateRangeIcon sx={{ fontSize: 22, color: 'primary.main' }} />} label="الفترة" value={`${offer.start_date} ← ${offer.end_date}`} />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon="💰" label="الأجر" value={offer.daily_rate ? `${offer.daily_rate} ${CURRENCY}/يوم` : 'قابل للتفاوض'} />
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <InfoTile icon={<PaymentsIcon sx={{ fontSize: 22, color: 'primary.main' }} />} label="الأجر" value={offer.daily_rate ? `${offer.daily_rate} ${CURRENCY}/يوم` : 'قابل للتفاوض'} />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon="⛴️" label="السفينة" value={offer.vessel_type || 'غير محدد'} />
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <InfoTile icon={<DirectionsBoatIcon sx={{ fontSize: 22, color: 'primary.main' }} />} label="السفينة" value={offer.vessel_type || 'غير محدد'} />
                 </Grid>
               </Grid>
 
@@ -186,8 +190,8 @@ export default function OfferDetail() {
 
 function InfoTile({ icon, label, value }) {
   return (
-    <Paper variant="outlined" sx={{ p: 1.8, textAlign: 'center' }}>
-      <Typography fontSize={22}>{icon}</Typography>
+    <Paper variant="outlined" sx={{ p: 1.6, textAlign: 'center' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}>{icon}</Box>
       <Typography variant="caption" color="text.secondary" display="block">{label}</Typography>
       <Typography fontWeight={600} fontSize={13} sx={{ mt: 0.3 }}>{value}</Typography>
     </Paper>

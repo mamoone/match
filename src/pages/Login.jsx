@@ -87,7 +87,7 @@ export default function Login() {
         >
           <InfoOutlinedIcon fontSize="small" sx={{ color: 'primary.main', mt: 0.3 }} />
           <Typography fontSize={13} color="text.secondary">
-            معرفات الدخول الافتراضية: <b dir="ltr">mmn@match.ma</b> / <b dir="ltr">mmn123!</b> — يمكنك تغيير كلمة المرور من صفحة الملف الشخصي.
+            معرفات مسؤول المنصة: <b dir="ltr">mmn@match.ma</b> / <b dir="ltr">mmn123!</b> — يمكنك تغيير كلمة المرور من صفحة الملف الشخصي.
           </Typography>
         </Box>
 

@@ -33,9 +33,11 @@ export const URGENCY_LABELS = {
 }
 
 export const PAYMENT_STATUS_LABELS = {
-  pending: 'غير مؤدى',
-  paid: 'مؤدى',
+  pending: 'في انتظار التحصيل',
+  ok: 'مكتمل',
 }
+
+export const COLLECTION_TOTAL = 100 // 50 capitaine + 50 marin par mission
 
 export const OFFER_STATUS_LABELS = {
   open: 'مفتوحة',
