@@ -69,10 +69,17 @@ export default function Dashboard() {
   }
 
   function showBrowserNotification(notif) {
+    if (typeof Notification === 'undefined') return
     if (Notification.permission === 'granted') {
-      new Notification('URGEMAR', { body: notif.message, icon: '/anchor.png' })
+      new Notification('URGEMAR — Remplacement', { body: notif.message })
     }
   }
+
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
 
   async function applyToOffer(offerId) {
     const { error } = await supabase.from('applications').insert({
