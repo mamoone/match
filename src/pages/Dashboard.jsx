@@ -85,9 +85,9 @@ export default function Dashboard() {
     const { error } = await supabase.from('applications').insert({
       offer_id: offerId,
       worker_id: session.user.id,
-      worker_name: profile.full_name,
-      worker_specialty: profile.specialty,
-      worker_phone: profile.phone,
+      worker_name: profile?.full_name,
+      worker_specialty: profile?.specialty,
+      worker_phone: profile?.phone,
     })
     if (error) {
       setToast(error.message)
@@ -96,7 +96,7 @@ export default function Dashboard() {
       fetchMyApplications()
       await supabase.from('notifications').insert({
         user_id: offers.find(o => o.id === offerId)?.posted_by,
-        message: `${profile.full_name} (${profile.specialty}) postule pour votre offre`,
+        message: `${profile?.full_name} (${profile?.specialty}) postule pour votre offre`,
         type: 'application',
         offer_id: offerId,
       })
@@ -122,7 +122,7 @@ export default function Dashboard() {
           <Chip
             size="small"
             value={profile?.role}
-            label={profile?.role === 'capitaine' ? profile.company_name || 'Capitaine' : profile.specialty || 'Marin'}
+            label={profile?.role === 'capitaine' ? profile?.company_name || 'Capitaine' : profile?.specialty || 'Marin'}
             color={profile?.role === 'marin' ? 'primary' : 'secondary'}
             sx={{ display: { xs: 'none', sm: 'flex' } }}
           />

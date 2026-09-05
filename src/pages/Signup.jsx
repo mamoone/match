@@ -7,9 +7,10 @@ import {
 import PersonIcon from '@mui/icons-material/Person'
 import AnchorIcon from '@mui/icons-material/Anchor'
 import { supabase } from '../utils/supabase'
-import { Logo } from '../App'
+import { useAuth, Logo } from '../App'
 
 export default function Signup() {
+  const { fetchProfile } = useAuth()
   const [form, setForm] = useState({
     full_name: '', email: '', password: '', phone: '',
     role: 'marin', company_name: '',
@@ -44,6 +45,7 @@ export default function Signup() {
         company_name: form.role === 'capitaine' ? form.company_name : null,
       })
       if (profileError) { setError(profileError.message); setLoading(false); return }
+      await fetchProfile(data.user.id)
     }
 
     navigate('/')
