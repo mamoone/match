@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
+import {
+  AppBar, Toolbar, Box, Container, Card, Typography, Button, Chip, Stack,
+  Grid, Paper, Avatar, Divider, Alert, Snackbar,
+} from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import PhoneIcon from '@mui/icons-material/Phone'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import { supabase } from '../utils/supabase'
-import { useAuth } from '../App'
+import { useAuth, Logo } from '../App'
 
 export default function OfferDetail() {
   const { id } = useParams()
-  const { session, profile } = useAuth()
+  const navigate = useNavigate()
+  const { session } = useAuth()
   const [offer, setOffer] = useState(null)
   const [applications, setApplications] = useState([])
+  const [toast, setToast] = useState('')
+
   const isOwner = offer?.posted_by === session.user.id
 
   useEffect(() => {
@@ -15,127 +25,169 @@ export default function OfferDetail() {
   }, [id])
 
   async function fetchOffer() {
-    const { data } = await supabase.from('job_offers')
-      .select('*, profiles!job_offers_posted_by_fkey(full_name, company_name, specialty)')
-      .eq('id', id).single()
+    const { data } = await supabase
+      .from('job_offers')
+      .select('*, profiles!job_offers_posted_by_fkey(full_name, company_name)')
+      .eq('id', id)
+      .single()
     setOffer(data)
-    if (data) fetchApplications(data.posted_by, data.filled_by)
+    if (data) fetchApplications()
   }
 
-  async function fetchApplications(postedBy, filledBy) {
-    const { data } = await supabase.from('applications')
+  async function fetchApplications() {
+    const { data } = await supabase
+      .from('applications')
       .select('*')
-      .eq('offer_id', id).order('created_at', { ascending: true })
+      .eq('offer_id', id)
+      .order('created_at', { ascending: true })
     setApplications(data || [])
   }
 
-  async function acceptApplication(appId, workerId) {
-    await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId)
+  async function selectCandidate(workerId) {
+    const app = applications.find(a => a.worker_id === workerId)
+    await supabase.from('applications').update({ status: 'accepted' }).eq('id', app.id)
     await supabase.from('job_offers').update({ status: 'filled', filled_by: workerId }).eq('id', id)
-    await supabase.from('applications').update({ status: 'rejected' }).eq('offer_id', id).neq('id', appId)
-    const { data: app } = await supabase.from('applications').select('*').eq('id', appId).single()
+    await supabase.from('applications').update({ status: 'rejected' }).eq('offer_id', id).neq('id', app.id)
     await supabase.from('notifications').insert({
       user_id: workerId,
-      message: `Votre candidature pour "${offer.title}" a été acceptée !`,
-      type: 'accepted', offer_id: id
+      message: `Votre candidature pour « ${offer.title} » a été acceptée ! 🎉`,
+      type: 'accepted',
+      offer_id: id,
     })
+    setToast('Marin embarqué. Les autres ont été refusés.')
     fetchOffer()
   }
 
-  async function selectCandidate(workerId, workerName) {
-    await acceptApplication(
-      applications.find(a => a.worker_id === workerId)?.id,
-      workerId
+  if (!offer) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div className="spinner" />
+      </Box>
     )
-    setApplications(prev => prev.map(a => a.worker_id === workerId ? { ...a, status: 'accepted' } : { ...a, status: 'rejected' }))
   }
 
-  if (!offer) return <div className="loading-screen"><div className="spinner"></div></div>
+  const company = offer.profiles?.company_name || offer.profiles?.full_name
 
   return (
-    <div className="app-layout">
-      <header className="app-header">
-        <div className="header-left">
-          <Link to="/" className="logo">
-            <span className="logo-icon">⚓</span>
-            <span className="logo-text">URGEMAR</span>
-          </Link>
-        </div>
-        <div className="header-right">
-          <Link to="/" className="btn-ghost btn-sm">← Retour</Link>
-        </div>
-      </header>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <AppBar position="sticky" elevation={0}>
+        <Toolbar sx={{ gap: 1, px: { xs: 1.5, sm: 3 } }}>
+          <Logo />
+          <Box sx={{ flexGrow: 1 }} />
+          <Button color="inherit" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')}>
+            Retour
+          </Button>
+        </Toolbar>
+      </AppBar>
 
-      <main className="app-main">
-        <div className="offer-detail">
-          <div className="detail-header">
-            <div className="detail-tags">
-              <span className="offer-specialty">{offer.specialty_needed}</span>
-              <span className={`urgency-tag urgency-${offer.urgency}`}>{offer.urgency === 'urgent' ? '🔴 URGENT' : '🟡 Standard'}</span>
-              {offer.status === 'filled' && <span className="urgency-tag urgency-filled">✅ Poste pourvu</span>}
-            </div>
-            <h1>{offer.title}</h1>
-            <p className="company-name">{offer.profiles?.company_name || offer.profiles?.full_name}</p>
-          </div>
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Box className="match-fade">
+          <Card sx={{ p: { xs: 3, sm: 4 }, mb: 3 }}>
+            <Stack spacing={2}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip label={offer.specialty_needed} color={offer.specialty_needed === 'Capitaine' ? 'secondary' : 'info'} />
+                <Chip
+                  label={offer.urgency === 'urgent' ? '🔴 URGENT' : 'Standard'}
+                  color={offer.urgency === 'urgent' ? 'error' : 'default'}
+                />
+                {offer.status === 'filled' && <Chip label="✓ Poste pourvu" color="success" />}
+              </Box>
+              <Typography variant="h4">{offer.title}</Typography>
+              <Typography color="text.secondary">⛴️ {company}</Typography>
 
-          <div className="detail-info-grid">
-            <div className="info-card">
-              <span className="info-icon">📍</span>
-              <div><small>Port</small><strong>{offer.location}</strong></div>
-            </div>
-            <div className="info-card">
-              <span className="info-icon">📅</span>
-              <div><small>Période</small><strong>{offer.start_date} → {offer.end_date}</strong></div>
-            </div>
-            <div className="info-card">
-              <span className="info-icon">💰</span>
-              <div><small>Taux</small><strong>{offer.daily_rate ? offer.daily_rate + ' €/jour' : 'Négociable'}</strong></div>
-            </div>
-            <div className="info-card">
-              <span className="info-icon">⛴️</span>
-              <div><small>Navire</small><strong>{offer.vessel_type || 'Non spécifié'}</strong></div>
-            </div>
-          </div>
+              <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon="📍" label="Port" value={offer.location} />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon="📅" label="Période" value={`${offer.start_date} → ${offer.end_date}`} />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon="💰" label="Taux" value={offer.daily_rate ? `${offer.daily_rate} €/jour` : 'Négociable'} />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon="⛴️" label="Navire" value={offer.vessel_type || 'Non spécifié'} />
+                </Grid>
+              </Grid>
 
-          <div className="detail-section">
-            <h3>Description de la mission</h3>
-            <p>{offer.description}</p>
-          </div>
+              <Divider sx={{ my: 1 }} />
+
+              <Box>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>Description de la mission</Typography>
+                <Typography color="text.secondary" sx={{ lineHeight: 1.7 }}>{offer.description}</Typography>
+              </Box>
+            </Stack>
+          </Card>
 
           {isOwner && (
-            <div className="detail-section">
-              <h3>Candidatures ({applications.length})</h3>
+            <Paper sx={{ p: { xs: 2.5, sm: 3 } }}>
+              <Typography variant="h5" sx={{ mb: 2 }}>
+                Candidatures ({applications.length})
+              </Typography>
+
               {applications.length === 0 ? (
-                <p className="text-muted">Aucune candidature pour le moment</p>
+                <Typography color="text.secondary">Aucune candidature pour le moment.</Typography>
               ) : (
-                <div className="applications-list">
+                <Stack spacing={1.5}>
                   {applications.map(app => (
-                    <div key={app.id} className={`application-card app-${app.status}`}>
-                      <div className="app-avatar">🧑‍✈️</div>
-                      <div className="app-info">
-                        <strong>{app.worker_name}</strong>
-                        <span>{app.worker_specialty}</span>
-                        <span className="app-phone">📞 {app.worker_phone}</span>
-                      </div>
-                      <div className="app-status">
-                        {app.status === 'pending' && offer.status === 'open' ? (
-                          <button className="btn-success" onClick={() => selectCandidate(app.worker_id, app.worker_name)}>
-                            ✓ Accepter ce marin
-                          </button>
-                        ) : (
-                          <span className={`status-badge status-${app.status}`}>
-                            {app.status === 'accepted' ? '✅ CHOISI' : app.status === 'rejected' ? '❌ Refusé' : '⏳ En attente'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    <Card
+                      key={app.id}
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 2,
+                        alignItems: 'center',
+                        borderColor: app.status === 'accepted' ? 'success.main' : 'divider',
+                        opacity: app.status === 'rejected' ? 0.55 : 1,
+                      }}
+                    >
+                      <Avatar sx={{ bgcolor: '#0ea5e9' }}>🧑‍✈️</Avatar>
+                      <Box sx={{ flexGrow: 1, minWidth: 160 }}>
+                        <Typography fontWeight={700}>{app.worker_name}</Typography>
+                        <Typography color="text.secondary" fontSize={13}>{app.worker_specialty}</Typography>
+                        <Typography color="text.secondary" fontSize={13} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <PhoneIcon fontSize="small" /> {app.worker_phone}
+                        </Typography>
+                      </Box>
+                      {app.status === 'pending' && offer.status === 'open' ? (
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={<CheckCircleIcon />}
+                          onClick={() => selectCandidate(app.worker_id)}
+                        >
+                          Embarquer ce marin
+                        </Button>
+                      ) : (
+                        <Chip
+                          variant="outlined"
+                          color={app.status === 'accepted' ? 'success' : app.status === 'rejected' ? 'error' : 'warning'}
+                          label={app.status === 'accepted' ? 'Choisi ✓' : app.status === 'rejected' ? 'Refusé' : 'En attente'}
+                        />
+                      )}
+                    </Card>
                   ))}
-                </div>
+                </Stack>
               )}
-            </div>
+            </Paper>
           )}
-        </div>
-      </main>
-    </div>
+        </Box>
+      </Container>
+
+      <Snackbar open={Boolean(toast)} autoHideDuration={4000} onClose={() => setToast('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity="success" variant="filled" onClose={() => setToast('')}>{toast}</Alert>
+      </Snackbar>
+    </Box>
+  )
+}
+
+function InfoTile({ icon, label, value }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.8, textAlign: 'center' }}>
+      <Typography fontSize={22}>{icon}</Typography>
+      <Typography variant="caption" color="text.secondary" display="block">{label}</Typography>
+      <Typography fontWeight={600} fontSize={13} sx={{ mt: 0.3 }}>{value}</Typography>
+    </Paper>
   )
 }

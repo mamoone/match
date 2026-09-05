@@ -1,18 +1,18 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import {
+  Box, Card, TextField, Button, Typography, Alert, Stack,
+  ToggleButton, ToggleButtonGroup,
+} from '@mui/material'
+import PersonIcon from '@mui/icons-material/Person'
+import AnchorIcon from '@mui/icons-material/Anchor'
 import { supabase } from '../utils/supabase'
-
-const SPECIALTIES = [
-  'Capitaine', 'Second Capitaine', 'Officier Mécanicien', 'Chef Mécanicien',
-  'Mécanicien', 'Matelot', 'Maître d\'Equipage', 'Cuisinier',
-  'Electricien Maritime', 'Soudeur', 'Plongeur', 'Agent de Pont',
-  'Timonier', 'Enseigne', 'Pilote'
-]
+import { Logo } from '../App'
 
 export default function Signup() {
   const [form, setForm] = useState({
     full_name: '', email: '', password: '', phone: '',
-    role: 'marin', specialty: '', company_name: ''
+    role: 'marin', company_name: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,9 +28,7 @@ export default function Signup() {
     const { data, error: authError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: {
-        data: { full_name: form.full_name, phone: form.phone }
-      }
+      options: { data: { full_name: form.full_name, phone: form.phone } },
     })
 
     if (authError) { setError(authError.message); setLoading(false); return }
@@ -42,10 +40,9 @@ export default function Signup() {
         email: form.email,
         phone: form.phone,
         role: form.role,
-        specialty: form.role === 'marin' ? form.specialty : null,
-        company_name: form.role === 'responsable' ? form.company_name : null
+        specialty: form.role === 'marin' ? 'Marin' : 'Capitaine',
+        company_name: form.role === 'capitaine' ? form.company_name : null,
       })
-
       if (profileError) { setError(profileError.message); setLoading(false); return }
     }
 
@@ -54,80 +51,73 @@ export default function Signup() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-header">
-          <div className="logo">
-            <span className="logo-icon">⚓</span>
-            <span className="logo-text">URGEMAR</span>
-          </div>
-          <p className="auth-subtitle">Rejoignez le réseau de remplacement maritime</p>
-        </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'radial-gradient(1000px 500px at 20% 10%, rgba(14,165,233,0.12), transparent), radial-gradient(800px 500px at 85% 90%, rgba(99,102,241,0.12), transparent), #0b1120',
+        px: 2,
+        py: 4,
+      }}
+    >
+      <Card className="match-fade" sx={{ width: '100%', maxWidth: 460, p: { xs: 3, sm: 4 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+          <Logo />
+        </Box>
+        <Typography align="center" variant="h5" sx={{ mb: 0.5 }}>
+          Créer un compte
+        </Typography>
+        <Typography color="text.secondary" align="center" sx={{ mb: 3, fontSize: 14 }}>
+          Rejoignez le réseau de remplacement maritime
+        </Typography>
 
-        <form onSubmit={handleSignup} className="auth-form">
-          <h2>Inscription</h2>
-          {error && <div className="error-msg">{error}</div>}
+        <Stack component="form" spacing={2} onSubmit={handleSignup}>
+          {error && <Alert severity="error">{error}</Alert>}
 
-          <div className="form-group">
-            <label>Nom complet</label>
-            <input type="text" value={form.full_name} onChange={e => update('full_name', e.target.value)} required />
-          </div>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={form.role}
+            onChange={(_e, v) => v && update('role', v)}
+            sx={{ mb: 1 }}
+          >
+            <ToggleButton value="marin" sx={{ flex: 1, py: 1.5, gap: 1 }}>
+              <PersonIcon fontSize="small" /> Marin
+            </ToggleButton>
+            <ToggleButton value="capitaine" sx={{ flex: 1, py: 1.5, gap: 1 }}>
+              <AnchorIcon fontSize="small" /> Capitaine
+            </ToggleButton>
+          </ToggleButtonGroup>
 
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={form.email} onChange={e => update('email', e.target.value)} required />
-          </div>
+          <TextField label="Nom complet" value={form.full_name} onChange={e => update('full_name', e.target.value)} required fullWidth />
+          <TextField label="Email" type="email" value={form.email} onChange={e => update('email', e.target.value)} required fullWidth />
+          <TextField label="Téléphone" type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required fullWidth />
+          <TextField label="Mot de passe" type="password" value={form.password} onChange={e => update('password', e.target.value)} required fullWidth inputProps={{ minLength: 6 }} />
 
-          <div className="form-group">
-            <label>Téléphone</label>
-            <input type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required />
-          </div>
-
-          <div className="form-group">
-            <label>Mot de passe</label>
-            <input type="password" value={form.password} onChange={e => update('password', e.target.value)} required minLength={6} />
-          </div>
-
-          <div className="form-group">
-            <label>Je suis</label>
-            <div className="role-selector">
-              <button type="button" className={`role-btn ${form.role === 'marin' ? 'active' : ''}`} onClick={() => update('role', 'marin')}>
-                <span className="role-icon">🧑‍✈️</span>
-                <span>Marin</span>
-              </button>
-              <button type="button" className={`role-btn ${form.role === 'responsable' ? 'active' : ''}`} onClick={() => update('role', 'responsable')}>
-                <span className="role-icon">🏢</span>
-                <span>Responsable</span>
-              </button>
-            </div>
-          </div>
-
-          {form.role === 'marin' && (
-            <div className="form-group">
-              <label>Spécialité</label>
-              <select value={form.specialty} onChange={e => update('specialty', e.target.value)} required>
-                <option value="">Choisir une spécialité</option>
-                {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+          {form.role === 'capitaine' && (
+            <TextField
+              label="Navire / Compagnie"
+              value={form.company_name}
+              onChange={e => update('company_name', e.target.value)}
+              required
+              fullWidth
+              placeholder="Nom du navire ou de la compagnie"
+            />
           )}
 
-          {form.role === 'responsable' && (
-            <div className="form-group">
-              <label>Nom de l'entreprise</label>
-              <input type="text" value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
-            </div>
-          )}
-
-          <button type="submit" className="btn-primary" disabled={loading}>
+          <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
             {loading ? 'Création...' : 'Créer mon compte'}
-          </button>
+          </Button>
+        </Stack>
 
-          <p className="auth-link">
-            Déjà inscrit ? <Link to="/login">Se connecter</Link>
-          </p>
-        </form>
-      </div>
-    </div>
+        <Typography align="center" sx={{ mt: 2.5, fontSize: 14 }} color="text.secondary">
+          Déjà inscrit ?{' '}
+          <Typography component={Link} to="/login" color="primary" sx={{ fontWeight: 700, textDecoration: 'none' }}>
+            Se connecter
+          </Typography>
+        </Typography>
+      </Card>
+    </Box>
   )
 }

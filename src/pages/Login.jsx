@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import {
+  Box, Card, TextField, Button, Typography, Alert, Stack,
+} from '@mui/material'
 import { supabase } from '../utils/supabase'
+import { Logo } from '../App'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -20,39 +24,56 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-header">
-          <div className="logo">
-            <span className="logo-icon">⚓</span>
-            <span className="logo-text">URGEMAR</span>
-          </div>
-          <p className="auth-subtitle">Remplacement maritime en urgence</p>
-        </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'radial-gradient(1000px 500px at 20% 10%, rgba(14,165,233,0.12), transparent), radial-gradient(800px 500px at 85% 90%, rgba(99,102,241,0.12), transparent), #0b1120',
+        px: 2,
+      }}
+    >
+      <Card className="match-fade" sx={{ width: '100%', maxWidth: 420, p: { xs: 3, sm: 4 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+          <Logo />
+        </Box>
+        <Typography color="text.secondary" align="center" sx={{ mb: 3, fontSize: 14 }}>
+          Remplacement maritime en urgence
+        </Typography>
 
-        <form onSubmit={handleLogin} className="auth-form">
-          <h2>Connexion</h2>
-          {error && <div className="error-msg">{error}</div>}
+        <Stack component="form" spacing={2} onSubmit={handleLogin}>
+          {error && <Alert severity="error">{error}</Alert>}
 
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="votre@email.com" />
-          </div>
-
-          <div className="form-group">
-            <label>Mot de passe</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
-          </div>
-
-          <button type="submit" className="btn-primary" disabled={loading}>
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            fullWidth
+            autoComplete="email"
+          />
+          <TextField
+            label="Mot de passe"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            fullWidth
+            autoComplete="current-password"
+          />
+          <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
             {loading ? 'Connexion...' : 'Se connecter'}
-          </button>
+          </Button>
+        </Stack>
 
-          <p className="auth-link">
-            Pas encore de compte ? <Link to="/signup">S'inscrire</Link>
-          </p>
-        </form>
-      </div>
-    </div>
+        <Typography align="center" sx={{ mt: 2.5, fontSize: 14 }} color="text.secondary">
+          Pas encore de compte ?{' '}
+          <Typography component={Link} to="/signup" color="primary" sx={{ fontWeight: 700, textDecoration: 'none' }}>
+            S'inscrire
+          </Typography>
+        </Typography>
+      </Card>
+    </Box>
   )
 }

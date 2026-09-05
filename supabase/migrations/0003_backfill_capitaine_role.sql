@@ -1,0 +1,1 @@
+update public.profiles set role = 'capitaine' where role = 'responsable';

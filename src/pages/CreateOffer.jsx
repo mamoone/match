@@ -1,22 +1,21 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import {
+  AppBar, Toolbar, Box, Container, Card, TextField, Button, Typography,
+  Alert, Stack, Select, MenuItem, InputLabel, FormControl, RadioGroup,
+  FormControlLabel, Radio,
+} from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { supabase } from '../utils/supabase'
-import { useAuth } from '../App'
-
-const SPECIALTIES = [
-  'Capitaine', 'Second Capitaine', 'Officier Mécanicien', 'Chef Mécanicien',
-  'Mécanicien', 'Matelot', 'Maître d\'Equipage', 'Cuisinier',
-  'Electricien Maritime', 'Soudeur', 'Plongeur', 'Agent de Pont',
-  'Timonier', 'Enseigne', 'Pilote'
-]
+import { useAuth, Logo } from '../App'
 
 export default function CreateOffer() {
-  const { session, profile } = useAuth()
+  const { session } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({
-    title: '', description: '', specialty_needed: '',
+    title: '', description: '', specialty_needed: 'Marin',
     location: '', start_date: '', end_date: '',
-    daily_rate: '', urgency: 'standard', vessel_type: ''
+    daily_rate: '', urgency: 'standard', vessel_type: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -27,100 +26,136 @@ export default function CreateOffer() {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     const { error: insertError } = await supabase.from('job_offers').insert({
       ...form,
       daily_rate: form.daily_rate ? Number(form.daily_rate) : null,
       posted_by: session.user.id,
-      status: 'open'
+      status: 'open',
     })
-
     if (insertError) { setError(insertError.message); setLoading(false); return }
     navigate('/')
   }
 
   return (
-    <div className="app-layout">
-      <header className="app-header">
-        <div className="header-left">
-          <Link to="/" className="logo">
-            <span className="logo-icon">⚓</span>
-            <span className="logo-text">URGEMAR</span>
-          </Link>
-        </div>
-        <div className="header-right">
-          <Link to="/" className="btn-ghost btn-sm">← Retour</Link>
-        </div>
-      </header>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <AppBar position="sticky" elevation={0}>
+        <Toolbar sx={{ gap: 1, px: { xs: 1.5, sm: 3 } }}>
+          <Logo />
+          <Box sx={{ flexGrow: 1 }} />
+          <Button color="inherit" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')}>
+            Retour
+          </Button>
+        </Toolbar>
+      </AppBar>
 
-      <main className="app-main">
-        <div className="form-page">
-          <h1>Publier une offre de remplacement</h1>
-          <p className="text-muted">Décrivez votre besoin. Les marins éligibles seront notifiés instantanément.</p>
+      <Container maxWidth="sm" sx={{ py: 4 }}>
+        <Card className="match-fade" sx={{ p: { xs: 3, sm: 4 } }}>
+          <Typography variant="h4" sx={{ mb: 0.5 }}>Publier une offre</Typography>
+          <Typography color="text.secondary" sx={{ mb: 3, fontSize: 14 }}>
+            Les marins éligibles seront notifiés instantanément.
+          </Typography>
 
-          <form onSubmit={handleSubmit} className="offer-form">
-            {error && <div className="error-msg">{error}</div>}
+          <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
+            {error && <Alert severity="error">{error}</Alert>}
 
-            <div className="form-group">
-              <label>Titre de l'offre *</label>
-              <input type="text" value={form.title} onChange={e => update('title', e.target.value)} required placeholder="Ex: Capitaine pour porte-conteneurs" />
-            </div>
+            <TextField
+              label="Titre de l'offre *"
+              value={form.title}
+              onChange={e => update('title', e.target.value)}
+              required
+              fullWidth
+              placeholder="Ex: Capitaine pour porte-conteneurs"
+            />
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Spécialité recherchée *</label>
-                <select value={form.specialty_needed} onChange={e => update('specialty_needed', e.target.value)} required>
-                  <option value="">Choisir</option>
-                  {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Type de navire</label>
-                <input type="text" value={form.vessel_type} onChange={e => update('vessel_type', e.target.value)} placeholder="Ex: Porte-conteneurs, Pétrolier..." />
-              </div>
-            </div>
+            <FormControl fullWidth>
+              <InputLabel>Poste recherché</InputLabel>
+              <Select
+                value={form.specialty_needed}
+                onChange={e => update('specialty_needed', e.target.value)}
+                label="Poste recherché"
+              >
+                <MenuItem value="Marin">Marin</MenuItem>
+                <MenuItem value="Capitaine">Capitaine</MenuItem>
+              </Select>
+            </FormControl>
 
-            <div className="form-group">
-              <label>Description *</label>
-              <textarea value={form.description} onChange={e => update('description', e.target.value)} required rows={4} placeholder="Décrivez la mission, les conditions, exigences..." />
-            </div>
+            <TextField
+              label="Description de la mission *"
+              value={form.description}
+              onChange={e => update('description', e.target.value)}
+              required
+              fullWidth
+              multiline
+              minRows={4}
+              placeholder="Décrivez la mission, les conditions, les exigences..."
+            />
 
-            <div className="form-group">
-              <label>Port / Lieu d'embarquement *</label>
-              <input type="text" value={form.location} onChange={e => update('location', e.target.value)} required placeholder="Ex: Marseille, Le Havre, Dakar..." />
-            </div>
+            <TextField
+              label="Port / Lieu d'embarquement *"
+              value={form.location}
+              onChange={e => update('location', e.target.value)}
+              required
+              fullWidth
+              placeholder="Ex: Marseille, Le Havre, Dakar..."
+            />
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Date de début *</label>
-                <input type="date" value={form.start_date} onChange={e => update('start_date', e.target.value)} required />
-              </div>
-              <div className="form-group">
-                <label>Date de fin *</label>
-                <input type="date" value={form.end_date} onChange={e => update('end_date', e.target.value)} required />
-              </div>
-            </div>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Date de début *"
+                type="date"
+                value={form.start_date}
+                onChange={e => update('start_date', e.target.value)}
+                required
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                label="Date de fin *"
+                type="date"
+                value={form.end_date}
+                onChange={e => update('end_date', e.target.value)}
+                required
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Taux journalier (€)</label>
-                <input type="number" value={form.daily_rate} onChange={e => update('daily_rate', e.target.value)} placeholder="Optionnel" min="0" />
-              </div>
-              <div className="form-group">
-                <label>Urgence</label>
-                <select value={form.urgency} onChange={e => update('urgency', e.target.value)}>
-                  <option value="standard">Standard</option>
-                  <option value="urgent">Urgent (notif push)</option>
-                </select>
-              </div>
-            </div>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Taux journalier (€)"
+                type="number"
+                value={form.daily_rate}
+                onChange={e => update('daily_rate', e.target.value)}
+                fullWidth
+                inputProps={{ min: 0 }}
+              />
+              <TextField
+                label="Type de navire"
+                value={form.vessel_type}
+                onChange={e => update('vessel_type', e.target.value)}
+                fullWidth
+                placeholder="Porte-conteneurs, pétrolier..."
+              />
+            </Stack>
 
-            <button type="submit" className="btn-primary btn-lg" disabled={loading}>
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Urgence</Typography>
+              <RadioGroup
+                row
+                value={form.urgency}
+                onChange={e => update('urgency', e.target.value)}
+              >
+                <FormControlLabel value="standard" control={<Radio />} label="Standard" />
+                <FormControlLabel value="urgent" control={<Radio color="error" />} label="Urgent 🔴" />
+              </RadioGroup>
+            </Box>
+
+            <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
               {loading ? 'Publication...' : 'Publier l\'offre'}
-            </button>
-          </form>
-        </div>
-      </main>
-    </div>
+            </Button>
+          </Stack>
+        </Card>
+      </Container>
+    </Box>
   )
 }

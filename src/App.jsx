@@ -1,5 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
+import { Box, Typography, Button, Avatar } from '@mui/material'
+import WavesIcon from '@mui/icons-material/Waves'
 import { supabase, isSupabaseConfigured } from './utils/supabase'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -13,13 +15,86 @@ const AuthContext = createContext()
 
 export const useAuth = () => useContext(AuthContext)
 
+export function Logo({ size = 'md' }) {
+  const px = size === 'lg' ? 44 : 34
+  const fs = size === 'lg' ? 26 : 20
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+      <Avatar
+        sx={{
+          width: px,
+          height: px,
+          background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
+          boxShadow: '0 4px 14px rgba(14,165,233,.35)',
+        }}
+      >
+        <WavesIcon sx={{ color: '#fff', fontSize: px * 0.62 }} />
+      </Avatar>
+      <Typography
+        component={Link}
+        to="/"
+        sx={{
+          fontWeight: 800,
+          fontSize: fs,
+          letterSpacing: '-0.03em',
+          color: 'text.primary',
+          textDecoration: 'none',
+          background: 'linear-gradient(135deg, #7dd3fc, #a5b4fc)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}
+      >
+        Match
+      </Typography>
+    </Box>
+  )
+}
+
 function ProtectedRoute({ children, adminOnly = false }) {
   const { session, profile, loading } = useAuth()
 
-  if (loading) return <div className="loading-screen"><div className="spinner"></div></div>
+  if (loading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div className="spinner" />
+      </Box>
+    )
+  }
+  if (!isSupabaseConfigured()) return <ConfigWarning />
   if (!session) return <Navigate to="/login" />
   if (adminOnly && profile?.role !== 'admin') return <Navigate to="/" />
   return children
+}
+
+function ConfigWarning() {
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        px: 3,
+        textAlign: 'center',
+      }}
+    >
+      <WavesIcon sx={{ fontSize: 64, color: 'primary.main' }} />
+      <Typography variant="h4">Match</Typography>
+      <Typography color="text.secondary" sx={{ maxWidth: 520 }}>
+        L'application est en ligne mais le backend Supabase n'est pas encore connecté.
+      </Typography>
+      <Button
+        variant="contained"
+        href="https://github.com/mamoone/match/settings/secrets/actions"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Configurer les secrets
+      </Button>
+    </Box>
+  )
 }
 
 export default function App() {
@@ -73,22 +148,6 @@ export default function App() {
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
         </Routes>
       </HashRouter>
-      {!isSupabaseConfigured() && <ConfigWarning />}
     </AuthContext.Provider>
-  )
-}
-
-function ConfigWarning() {
-  return (
-    <div className="config-warning">
-      <span className="logo-icon">⚓</span>
-      <h2>Configuration requise</h2>
-      <p>
-        L'application est en ligne mais le backend Supabase n'est pas encore connecté.
-        Ajoutez les secrets GitHub <strong>VITE_SUPABASE_URL</strong> et <strong>VITE_SUPABASE_ANON_KEY</strong>,
-        puis relancez le workflow <em>Deploy to GitHub Pages</em>.
-      </p>
-      <a className="btn-primary" href="https://github.com/mamoone/match/settings/secrets/actions" target="_blank" rel="noreferrer">Configurer les secrets</a>
-    </div>
   )
 }

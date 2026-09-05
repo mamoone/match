@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import {
+  AppBar, Toolbar, Box, Container, Card, TextField, Button, Typography,
+  Alert, Stack,
+} from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { supabase } from '../utils/supabase'
-import { useAuth } from '../App'
-
-const SPECIALTIES = [
-  'Capitaine', 'Second Capitaine', 'Officier Mécanicien', 'Chef Mécanicien',
-  'Mécanicien', 'Matelot', 'Maître d\'Equipage', 'Cuisinier',
-  'Electricien Maritime', 'Soudeur', 'Plongeur', 'Agent de Pont',
-  'Timonier', 'Enseigne', 'Pilote'
-]
+import { useAuth, Logo } from '../App'
 
 export default function Profile() {
   const { profile, fetchProfile, session } = useAuth()
   const [form, setForm] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -25,93 +24,132 @@ export default function Profile() {
   async function handleSave(e) {
     e.preventDefault()
     setLoading(true)
+    setError('')
     const updates = {
       full_name: form.full_name,
       phone: form.phone,
       specialty: form.role === 'marin' ? form.specialty : null,
-      company_name: form.role === 'responsable' ? form.company_name : null,
+      company_name: form.role === 'capitaine' ? form.company_name : null,
       experience_years: form.experience_years ? Number(form.experience_years) : null,
       certifications: form.certifications
     }
-    await supabase.from('profiles').update(updates).eq('id', session.user.id)
+    const { error } = await supabase.from('profiles').update(updates).eq('id', session.user.id)
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
     await fetchProfile(session.user.id)
     setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
     setLoading(false)
+    setTimeout(() => setSaved(false), 3000)
   }
 
-  if (!form) return <div className="loading-screen"><div className="spinner"></div></div>
+  if (!form) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div className="spinner" />
+      </Box>
+    )
+  }
+
+  const isMarin = form.role === 'marin'
+  const isCapitaine = form.role === 'capitaine'
 
   return (
-    <div className="app-layout">
-      <header className="app-header">
-        <div className="header-left">
-          <Link to="/" className="logo">
-            <span className="logo-icon">⚓</span>
-            <span className="logo-text">URGEMAR</span>
-          </Link>
-        </div>
-        <div className="header-right">
-          <Link to="/" className="btn-ghost btn-sm">← Retour</Link>
-        </div>
-      </header>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <AppBar position="sticky" elevation={0}>
+        <Toolbar sx={{ gap: 1, px: { xs: 1.5, sm: 3 } }}>
+          <Logo />
+          <Box sx={{ flexGrow: 1 }} />
+          <Button color="inherit" startIcon={<ArrowBackIcon />} component={Link} to="/">
+            Retour
+          </Button>
+        </Toolbar>
+      </AppBar>
 
-      <main className="app-main">
-        <div className="form-page">
-          <h1>Mon profil</h1>
-          {saved && <div className="success-msg">✓ Profil mis à jour</div>}
+      <Container maxWidth="sm" sx={{ py: 4 }}>
+        <Card className="match-fade" sx={{ p: { xs: 3, sm: 4 } }}>
+          <Typography variant="h4" sx={{ mb: 3 }}>Mon profil</Typography>
 
-          <form onSubmit={handleSave} className="offer-form">
-            <div className="form-group">
-              <label>Nom complet</label>
-              <input type="text" value={form.full_name} onChange={e => update('full_name', e.target.value)} required />
-            </div>
+          {saved && <Alert severity="success" sx={{ mb: 2 }}>Profil mis à jour ✓</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-            <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={form.email} disabled className="input-disabled" />
-            </div>
+          <Stack component="form" spacing={2.5} onSubmit={handleSave}>
+            <TextField
+              label="Nom complet"
+              value={form.full_name}
+              onChange={e => update('full_name', e.target.value)}
+              required
+              fullWidth
+            />
 
-            <div className="form-group">
-              <label>Téléphone</label>
-              <input type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required />
-            </div>
+            <TextField
+              label="Email"
+              value={form.email}
+              disabled
+              fullWidth
+            />
 
-            {form.role === 'marin' && (
+            <TextField
+              label="Téléphone"
+              type="tel"
+              value={form.phone}
+              onChange={e => update('phone', e.target.value)}
+              required
+              fullWidth
+            />
+
+            {isMarin && (
               <>
-                <div className="form-group">
-                  <label>Spécialité</label>
-                  <select value={form.specialty || ''} onChange={e => update('specialty', e.target.value)} required>
-                    <option value="">Choisir</option>
-                    {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
+                <TextField
+                  label="Spécialité"
+                  value={form.specialty}
+                  onChange={e => update('specialty', e.target.value)}
+                  required
+                  fullWidth
+                  placeholder="Capitaine, Officier Mécanicien, Matelot..."
+                  helperText="Votre qualification principale"
+                />
 
-                <div className="form-group">
-                  <label>Années d'expérience</label>
-                  <input type="number" value={form.experience_years || ''} onChange={e => update('experience_years', e.target.value)} min="0" />
-                </div>
+                <TextField
+                  label="Années d'expérience"
+                  type="number"
+                  value={form.experience_years || ''}
+                  onChange={e => update('experience_years', e.target.value)}
+                  fullWidth
+                  inputProps={{ min: 0 }}
+                />
 
-                <div className="form-group">
-                  <label>Diplômes / Certifications (séparés par virgules)</label>
-                  <textarea value={form.certifications || ''} onChange={e => update('certifications', e.target.value)} rows={3} placeholder="Ex: Capitaine 500 GT, STCW, SST..." />
-                </div>
+                <TextField
+                  label="Diplômes / Certifications"
+                  value={form.certifications || ''}
+                  onChange={e => update('certifications', e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  placeholder="Ex: Capitaine 500 GT, STCW, SST..."
+                  helperText="Séparés par des virgules"
+                />
               </>
             )}
 
-            {form.role === 'responsable' && (
-              <div className="form-group">
-                <label>Nom de l'entreprise</label>
-                <input type="text" value={form.company_name} onChange={e => update('company_name', e.target.value)} />
-              </div>
+            {isCapitaine && (
+              <TextField
+                label="Nom de l'entreprise"
+                value={form.company_name || ''}
+                onChange={e => update('company_name', e.target.value)}
+                fullWidth
+                placeholder="Ex: CMA CGM, Maersk..."
+              />
             )}
 
-            <button type="submit" className="btn-primary btn-lg" disabled={loading}>
+            <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
               {loading ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-          </form>
-        </div>
-      </main>
-    </div>
+            </Button>
+          </Stack>
+        </Card>
+      </Container>
+    </Box>
   )
 }
