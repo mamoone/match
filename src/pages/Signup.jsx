@@ -6,6 +6,7 @@ import {
 } from '@mui/material'
 import PersonIcon from '@mui/icons-material/Person'
 import AnchorIcon from '@mui/icons-material/Anchor'
+import LocationCityIcon from '@mui/icons-material/LocationCity'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
 
@@ -69,64 +70,79 @@ export default function Signup() {
           <Logo />
         </Box>
         <Typography align="center" variant="h5" sx={{ mb: 0.5 }}>
-          Créer un compte
+          إنشاء حساب
         </Typography>
         <Typography color="text.secondary" align="center" sx={{ mb: 3, fontSize: 14 }}>
-          Rejoignez le réseau de remplacement maritime
+          انضم إلى شبكة الرحل البحرية
         </Typography>
 
         <Stack component="form" spacing={2} onSubmit={handleSignup}>
           {error && <Alert severity="error">{error}</Alert>}
 
+          <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: 13 }}>
+            اختر نوع الحساب
+          </Typography>
           <ToggleButtonGroup
             exclusive
             fullWidth
             value={form.role}
             onChange={(_e, v) => v && update('role', v)}
-            sx={{ mb: 1 }}
           >
             <ToggleButton value="marin" sx={{ flex: 1, py: 1.5, gap: 1 }}>
-              <PersonIcon fontSize="small" /> Marin
+              <PersonIcon fontSize="small" /> بحار
             </ToggleButton>
             <ToggleButton value="capitaine" sx={{ flex: 1, py: 1.5, gap: 1 }}>
-              <AnchorIcon fontSize="small" /> Capitaine
+              <AnchorIcon fontSize="small" /> ربّان
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <TextField label="Nom complet" value={form.full_name} onChange={e => update('full_name', e.target.value)} required fullWidth />
-          <TextField label="Email" type="email" value={form.email} onChange={e => update('email', e.target.value)} required fullWidth />
-          <TextField label="Téléphone" type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required fullWidth />
+          <TextField label="الاسم الكامل" value={form.full_name} onChange={e => update('full_name', e.target.value)} required fullWidth />
+          <TextField label="البريد الإلكتروني" dir="ltr" type="email" value={form.email} onChange={e => update('email', e.target.value)} required fullWidth />
+          <TextField label="الهاتف" dir="ltr" type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required fullWidth />
+
           <TextField
-            label="Ville / Port d'attache"
+            label="كلمة المرور"
+            dir="ltr"
+            type="password"
+            value={form.password}
+            onChange={e => update('password', e.target.value)}
+            required
+            fullWidth
+            inputProps={{ minLength: 6 }}
+            helperText="الافتراضي: mmn123!"
+          />
+
+          <TextField
+            label="مدينة / ميناء الانطلاق"
             value={form.city}
             onChange={e => update('city', e.target.value)}
             required
             fullWidth
-            placeholder="SAFI"
-            helperText="Vous recevrez les offres publiées dans cette ville."
+            placeholder="آسفي (SAFI)"
+            helperText="ستستقبل عروض العمل المنشورة في هذه المدينة."
+            slotProps={{ input: { startAdornment: <LocationCityIcon fontSize="small" sx={{ ml: 1, color: 'text.secondary' }} /> } }}
           />
-          <TextField label="Mot de passe" type="password" value={form.password} onChange={e => update('password', e.target.value)} required fullWidth inputProps={{ minLength: 6 }} />
 
           {form.role === 'capitaine' && (
             <TextField
-              label="Navire / Compagnie"
+              label="اسم السفينة / الشركة"
               value={form.company_name}
               onChange={e => update('company_name', e.target.value)}
               required
               fullWidth
-              placeholder="Nom du navire ou de la compagnie"
+              placeholder="مثال: شركة الصيد البحري"
             />
           )}
 
           <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
-            {loading ? 'Création...' : 'Créer mon compte'}
+            {loading ? 'جارٍ الإنشاء...' : 'إنشاء الحساب'}
           </Button>
         </Stack>
 
         <Typography align="center" sx={{ mt: 2.5, fontSize: 14 }} color="text.secondary">
-          Déjà inscrit ?{' '}
+          لديك حساب ؟{' '}
           <Typography component={Link} to="/login" color="primary" sx={{ fontWeight: 700, textDecoration: 'none' }}>
-            Se connecter
+            الدخول
           </Typography>
         </Typography>
       </Card>

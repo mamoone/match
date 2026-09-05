@@ -1,6 +1,7 @@
 import { createTheme } from '@mui/material/styles'
 
 export const theme = createTheme({
+  direction: 'rtl',
   palette: {
     mode: 'dark',
     primary: { main: '#38bdf8', light: '#7dd3fc', dark: '#0284c7' },
@@ -20,7 +21,7 @@ export const theme = createTheme({
   },
   shape: { borderRadius: 14 },
   typography: {
-    fontFamily: `'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif`,
+    fontFamily: `'Cairo', 'Inter', 'Segoe UI', system-ui, sans-serif`,
     h1: { fontWeight: 800, letterSpacing: '-0.02em' },
     h2: { fontWeight: 800, letterSpacing: '-0.02em' },
     h3: { fontWeight: 800, letterSpacing: '-0.02em' },

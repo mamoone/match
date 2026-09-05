@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  Box, Card, TextField, Button, Typography, Alert, Stack,
+  Box, Card, TextField, Button, Typography, Alert, Stack, Divider,
 } from '@mui/material'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { supabase } from '../utils/supabase'
 import { Logo } from '../App'
 
@@ -18,7 +19,7 @@ export default function Login() {
     setLoading(true)
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setError(error.message)
+    if (error) setError(error.message === 'Invalid login credentials' ? 'بيانات الدخول غير صحيحة' : error.message)
     else navigate('/')
     setLoading(false)
   }
@@ -38,14 +39,15 @@ export default function Login() {
           <Logo />
         </Box>
         <Typography color="text.secondary" align="center" sx={{ mb: 3, fontSize: 14 }}>
-          Remplacement maritime en urgence
+          منصة الرحل البحرية في أزمة
         </Typography>
 
         <Stack component="form" spacing={2} onSubmit={handleLogin}>
           {error && <Alert severity="error">{error}</Alert>}
 
           <TextField
-            label="Email"
+            label="البريد الإلكتروني"
+            dir="ltr"
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
@@ -54,7 +56,8 @@ export default function Login() {
             autoComplete="email"
           />
           <TextField
-            label="Mot de passe"
+            label="كلمة المرور"
+            dir="ltr"
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
@@ -63,14 +66,35 @@ export default function Login() {
             autoComplete="current-password"
           />
           <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
-            {loading ? 'Connexion...' : 'Se connecter'}
+            {loading ? 'جارٍ الدخول...' : 'دخول'}
           </Button>
         </Stack>
 
+        <Divider sx={{ my: 2.5 }}>
+          <Typography variant="caption" color="text.secondary">تذكير</Typography>
+        </Divider>
+
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            alignItems: 'flex-start',
+            bgcolor: 'rgba(56,189,248,.08)',
+            borderRadius: 2,
+            p: 1.5,
+            fontSize: 13,
+          }}
+        >
+          <InfoOutlinedIcon fontSize="small" sx={{ color: 'primary.main', mt: 0.3 }} />
+          <Typography fontSize={13} color="text.secondary">
+            معرفات الدخول الافتراضية: <b dir="ltr">mmn@match.ma</b> / <b dir="ltr">mmn123!</b> — يمكنك تغيير كلمة المرور من صفحة الملف الشخصي.
+          </Typography>
+        </Box>
+
         <Typography align="center" sx={{ mt: 2.5, fontSize: 14 }} color="text.secondary">
-          Pas encore de compte ?{' '}
+          ليس لديك حساب ؟{' '}
           <Typography component={Link} to="/signup" color="primary" sx={{ fontWeight: 700, textDecoration: 'none' }}>
-            S'inscrire
+            سجّل الآن
           </Typography>
         </Typography>
       </Card>

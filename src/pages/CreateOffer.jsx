@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AppBar, Toolbar, Box, Container, Card, TextField, Button, Typography,
@@ -8,10 +8,14 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
+import { fetchConfig } from '../utils/config'
+import { SPECIALTY_LABELS, CURRENCY } from '../utils/constants'
 
 export default function CreateOffer() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const [specialties, setSpecialties] = useState([])
+  const [vessels, setVessels] = useState([])
   const [form, setForm] = useState({
     title: '', description: '', specialty_needed: 'Marin',
     location: '', start_date: '', end_date: '',
@@ -19,6 +23,13 @@ export default function CreateOffer() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchConfig().then(cf => {
+      setSpecialties(cf.specialties)
+      setVessels(cf.vessels)
+    })
+  }, [])
 
   function update(field, val) { setForm(p => ({ ...p, [field]: val })) }
 
@@ -43,65 +54,66 @@ export default function CreateOffer() {
           <Logo />
           <Box sx={{ flexGrow: 1 }} />
           <Button color="inherit" startIcon={<ArrowBackIcon />} onClick={() => navigate('/')}>
-            Retour
+            رجوع
           </Button>
         </Toolbar>
       </AppBar>
 
       <Container maxWidth="sm" sx={{ py: 4 }}>
         <Card className="match-fade" sx={{ p: { xs: 3, sm: 4 } }}>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>Publier une offre</Typography>
+          <Typography variant="h4" sx={{ mb: 0.5 }}>نشر عرض</Typography>
           <Typography color="text.secondary" sx={{ mb: 3, fontSize: 14 }}>
-            Les marins éligibles seront notifiés instantanément.
+            سيتم إشعار البحارة المؤهلين في مدينتك فور النشر.
           </Typography>
 
           <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
             {error && <Alert severity="error">{error}</Alert>}
 
             <TextField
-              label="Titre de l'offre *"
+              label="عنوان العرض *"
               value={form.title}
               onChange={e => update('title', e.target.value)}
               required
               fullWidth
-              placeholder="Ex: Capitaine pour porte-conteneurs"
+              placeholder="مثال: بحار لسفينة صيد السردين"
             />
 
             <FormControl fullWidth>
-              <InputLabel>Poste recherché</InputLabel>
+              <InputLabel>نوع المطلوب</InputLabel>
               <Select
                 value={form.specialty_needed}
                 onChange={e => update('specialty_needed', e.target.value)}
-                label="Poste recherché"
+                label="نوع المطلوب"
               >
-                <MenuItem value="Marin">Marin</MenuItem>
-                <MenuItem value="Capitaine">Capitaine</MenuItem>
+                {specialties.map(s => (
+                  <MenuItem key={s} value={s}>{SPECIALTY_LABELS[s] || s}</MenuItem>
+                ))}
               </Select>
             </FormControl>
 
             <TextField
-              label="Description de la mission *"
+              label="وصف المهمة *"
               value={form.description}
               onChange={e => update('description', e.target.value)}
               required
               fullWidth
               multiline
               minRows={4}
-              placeholder="Décrivez la mission, les conditions, les exigences..."
+              placeholder="صف المهمة، الشروط، المطلوب..."
             />
 
             <TextField
-              label="Port / Lieu d'embarquement *"
+              label="الميناء / مكان الإبحار *"
               value={form.location}
               onChange={e => update('location', e.target.value)}
               required
               fullWidth
-              placeholder="Ex: Marseille, Le Havre, Dakar..."
+              placeholder="مثال: آسفي، الدار البيضاء، طنجة..."
             />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
-                label="Date de début *"
+                label="تاريخ البداية *"
                 type="date"
                 value={form.start_date}
                 onChange={e => update('start_date', e.target.value)}
@@ -110,7 +122,7 @@ export default function CreateOffer() {
                 slotProps={{ inputLabel: { shrink: true } }}
               />
               <TextField
-                label="Date de fin *"
+                label="تاريخ النهاية *"
                 type="date"
                 value={form.end_date}
                 onChange={e => update('end_date', e.target.value)}
@@ -120,38 +132,43 @@ export default function CreateOffer() {
               />
             </Stack>
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                label="Taux journalier (€)"
-                type="number"
-                value={form.daily_rate}
-                onChange={e => update('daily_rate', e.target.value)}
-                fullWidth
-                inputProps={{ min: 0 }}
-              />
-              <TextField
-                label="Type de navire"
+            <FormControl fullWidth>
+              <InputLabel>نوع السفينة</InputLabel>
+              <Select
                 value={form.vessel_type}
                 onChange={e => update('vessel_type', e.target.value)}
-                fullWidth
-                placeholder="Porte-conteneurs, pétrolier..."
-              />
-            </Stack>
+                label="نوع السفينة"
+              >
+                {vessels.map(v => (
+                  <MenuItem key={v} value={v}>{v}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              label={`الأجر اليومي (${CURRENCY})`}
+              type="number"
+              value={form.daily_rate}
+              onChange={e => update('daily_rate', e.target.value)}
+              fullWidth
+              inputProps={{ min: 0 }}
+              helperText="بالدرهم المغربي"
+            />
 
             <Box>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>Urgence</Typography>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>درجة الاستعجال</Typography>
               <RadioGroup
                 row
                 value={form.urgency}
                 onChange={e => update('urgency', e.target.value)}
               >
-                <FormControlLabel value="standard" control={<Radio />} label="Standard" />
-                <FormControlLabel value="urgent" control={<Radio color="error" />} label="Urgent 🔴" />
+                <FormControlLabel value="standard" control={<Radio />} label="عادي" />
+                <FormControlLabel value="urgent" control={<Radio color="error" />} label="عاجل 🔴" />
               </RadioGroup>
             </Box>
 
             <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 1 }}>
-              {loading ? 'Publication...' : 'Publier l\'offre'}
+              {loading ? 'جارٍ النشر...' : 'نشر العرض'}
             </Button>
           </Stack>
         </Card>

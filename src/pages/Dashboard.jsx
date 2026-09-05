@@ -13,8 +13,10 @@ import AssignmentIcon from '@mui/icons-material/Assignment'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import PersonIcon from '@mui/icons-material/Person'
 import FmdGoodIcon from '@mui/icons-material/FmdGood'
+import PaymentsIcon from '@mui/icons-material/Payments'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
+import { SPECIALTY_LABELS, PAYMENT_STATUS_LABELS, CURRENCY } from '../utils/constants'
 
 const POLL_MS = 15000
 
@@ -23,6 +25,7 @@ export default function Dashboard() {
   const [offers, setOffers] = useState([])
   const [myApplications, setMyApplications] = useState([])
   const [notifications, setNotifications] = useState([])
+  const [payments, setPayments] = useState([])
   const [tab, setTab] = useState('offers')
   const [cityFilter, setCityFilter] = useState('city')
   const [notifAnchor, setNotifAnchor] = useState(null)
@@ -47,13 +50,14 @@ export default function Dashboard() {
   }, [isMarin, session?.user?.id])
 
   const fetchMyApplications = useCallback(async () => {
+    if (profile?.role !== 'marin') return
     const { data } = await supabase
       .from('applications')
       .select('*, job_offers(*)')
       .eq('worker_id', session.user.id)
       .order('created_at', { ascending: false })
     setMyApplications(data || [])
-  }, [session?.user?.id])
+  }, [session?.user?.id, profile?.role])
 
   const fetchNotifications = useCallback(async () => {
     const { data } = await supabase
@@ -65,10 +69,21 @@ export default function Dashboard() {
     setNotifications(data || [])
   }, [session?.user?.id])
 
+  const fetchPayments = useCallback(async () => {
+    if (profile?.role !== 'capitaine') return
+    const { data } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('profile_id', session.user.id)
+      .order('month', { ascending: false })
+    setPayments(data || [])
+  }, [session?.user?.id, profile?.role])
+
   useEffect(() => {
     fetchOffers()
-    if (isMarin) fetchMyApplications()
+    fetchMyApplications()
     fetchNotifications()
+    fetchPayments()
     setLastSync(new Date())
 
     const channel = supabase
@@ -94,8 +109,9 @@ export default function Dashboard() {
 
     const poll = setInterval(() => {
       fetchOffers()
-      if (isMarin) fetchMyApplications()
+      fetchMyApplications()
       fetchNotifications()
+      fetchPayments()
       setLastSync(new Date())
     }, POLL_MS)
 
@@ -104,7 +120,7 @@ export default function Dashboard() {
     }
 
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
-  }, [fetchOffers, fetchMyApplications, fetchNotifications, isMarin, session.user.id])
+  }, [fetchOffers, fetchMyApplications, fetchNotifications, fetchPayments, session.user.id])
 
   async function applyToOffer(offerId) {
     const { error } = await supabase.from('applications').insert({
@@ -117,11 +133,11 @@ export default function Dashboard() {
     if (error) {
       setToast(error.message)
     } else {
-      setToast('Candidature envoyée')
+      setToast('تم إرسال طلب الترشح ✓')
       fetchMyApplications()
       await supabase.from('notifications').insert({
         user_id: offers.find(o => o.id === offerId)?.posted_by,
-        message: `${profile?.full_name} (${profile?.specialty}) postule pour votre offre`,
+        message: `${profile?.full_name} (${profile?.specialty}) تقدم لطلب عن عرضكم`,
         type: 'application',
         offer_id: offerId,
       })
@@ -140,8 +156,8 @@ export default function Dashboard() {
         .map(o => ({
           ...o,
           inCity:
-            o.location.toLowerCase().includes(city) ||
-            city.includes(o.location.toLowerCase()),
+            (o.location || '').toLowerCase().includes(city) ||
+            city.includes((o.location || '').toLowerCase()),
         }))
         .filter(o => cityFilter === 'all' || o.inCity)
         .sort((a, b) =>
@@ -152,6 +168,8 @@ export default function Dashboard() {
     : offers
 
   const canPost = profile?.role === 'capitaine'
+  const lastPayment = payments[0] || null
+  const pendingCount = payments.filter(p => p.status === 'pending').length
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -171,7 +189,7 @@ export default function Dashboard() {
 
           {isMarin && (
             <>
-              <IconButton color="inherit" onClick={e => setNotifAnchor(e.currentTarget)} aria-label="notifications">
+              <IconButton color="inherit" onClick={e => setNotifAnchor(e.currentTarget)} aria-label="إشعارات">
                 <Badge badgeContent={unreadCount} color="error">
                   <NotificationsIcon />
                 </Badge>
@@ -180,21 +198,21 @@ export default function Dashboard() {
                 anchorEl={notifAnchor}
                 open={Boolean(notifAnchor)}
                 onClose={() => setNotifAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                 PaperProps={{ sx: { width: 340, maxHeight: 400, mt: 1 } }}
               >
                 <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography fontWeight={700}>Notifications</Typography>
+                  <Typography fontWeight={700}>الإشعارات</Typography>
                   {lastSync && (
                     <Typography variant="caption" color="text.secondary">
-                      {lastSync.toLocaleTimeString('fr')}
+                      {lastSync.toLocaleTimeString('ar')}
                     </Typography>
                   )}
                 </Box>
                 <Divider />
                 {notifications.length === 0 && (
                   <Typography color="text.secondary" sx={{ p: 2, fontSize: 14 }}>
-                    Aucune notification
+                    لا توجد إشعارات
                   </Typography>
                 )}
                 {notifications.map(n => (
@@ -210,8 +228,8 @@ export default function Dashboard() {
                     <Box sx={{ py: 0.5 }}>
                       <Typography fontSize={13}>{n.message}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(n.created_at).toLocaleTimeString('fr')} ·{' '}
-                        {new Date(n.created_at).toLocaleDateString('fr')}
+                        {new Date(n.created_at).toLocaleTimeString('ar')} ·{' '}
+                        {new Date(n.created_at).toLocaleDateString('ar')}
                       </Typography>
                     </Box>
                   </MenuItem>
@@ -221,14 +239,14 @@ export default function Dashboard() {
           )}
 
           {profile?.role === 'admin' && (
-            <IconButton component={Link} to="/admin" color="inherit" aria-label="admin">
+            <IconButton component={Link} to="/admin" color="inherit" aria-label="إدارة">
               <AdminPanelSettingsIcon />
             </IconButton>
           )}
-          <IconButton component={Link} to="/profile" color="inherit" aria-label="profil">
+          <IconButton component={Link} to="/profile" color="inherit" aria-label="ملفي">
             <PersonIcon />
           </IconButton>
-          <IconButton onClick={signOut} color="inherit" aria-label="déconnexion">
+          <IconButton onClick={signOut} color="inherit" aria-label="خروج">
             <LogoutIcon />
           </IconButton>
         </Toolbar>
@@ -252,20 +270,24 @@ export default function Dashboard() {
           >
             <Box>
               <Typography variant="h4" fontWeight={800}>
-                Bonjour, {profile?.full_name} 👋
+                مرحباً، {profile?.full_name} 👋
               </Typography>
               <Typography color="text.secondary" sx={{ mt: 0.5 }}>
                 {isMarin
-                  ? `Offres de remplacement à ${profile?.city || 'SAFI'} — une mission en un clic.`
-                  : 'Publiez un besoin urgent, trouvez le bon marin.'}
+                  ? `عروض الشغل المتاحة في ${profile?.city || 'SAFI'} — مهمة بنقرة واحدة.`
+                  : 'انشر حاجتك الملحة وابحث عن الربان المناسب.'}
               </Typography>
             </Box>
             {canPost && (
               <Button component={Link} to="/create-offer" variant="contained" size="large" startIcon={<AddIcon />}>
-                Nouvelle offre
+                عرض جديد
               </Button>
             )}
           </Paper>
+
+          {canPost && (
+            <PaymentPanel payments={payments} lastPayment={lastPayment} pendingCount={pendingCount} />
+          )}
 
           {isMarin ? (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
@@ -275,16 +297,16 @@ export default function Dashboard() {
                 value={cityFilter}
                 onChange={(_e, v) => v && setCityFilter(v)}
               >
-                <ToggleButton value="city">📍 Ma ville ({profile?.city || 'SAFI'})</ToggleButton>
-                <ToggleButton value="all">Toutes les villes</ToggleButton>
+                <ToggleButton value="city">📍 مدينتي ({profile?.city || 'SAFI'})</ToggleButton>
+                <ToggleButton value="all">كل المدن</ToggleButton>
               </ToggleButtonGroup>
               <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                <span className="live-dot" /> Actualisé en direct · {lastSync?.toLocaleTimeString('fr')}
+                <span className="live-dot" /> تحديث مباشر · {lastSync?.toLocaleTimeString('ar')}
               </Typography>
             </Box>
           ) : (
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2, textAlign: 'right' }}>
-              <span className="live-dot" /> Actualisé en direct · {lastSync?.toLocaleTimeString('fr')}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2, textAlign: 'left' }}>
+              <span className="live-dot" /> تحديث مباشر · {lastSync?.toLocaleTimeString('ar')}
             </Typography>
           )}
 
@@ -293,11 +315,11 @@ export default function Dashboard() {
               <Tab
                 icon={<WhereToVoteIcon />}
                 iconPosition="start"
-                label={isMarin ? `Offres (${visibleOffers.length})` : `Mes offres (${offers.length})`}
+                label={isMarin ? `العروض (${visibleOffers.length})` : `عروضي (${offers.length})`}
                 value="offers"
               />
               {isMarin && (
-                <Tab icon={<AssignmentIcon />} iconPosition="start" label={`Mes candidatures (${myApplications.length})`} value="applications" />
+                <Tab icon={<AssignmentIcon />} iconPosition="start" label={`طلباتي (${myApplications.length})`} value="applications" />
               )}
             </Tabs>
           </Paper>
@@ -307,13 +329,12 @@ export default function Dashboard() {
               {isMarin && cityFilter === 'city' && !visibleOffers.some(o => o.inCity) && (
                 <Paper sx={{ px: 2.5, py: 1.5, mb: 2, borderRadius: 2, bgcolor: 'rgba(99,102,241,.08)' }}>
                   <Typography fontSize={13} color="text.secondary">
-                    🔔 Aucune offre dans votre ville pour l'instant — activez « Toutes les villes » ou comparez plus tard.
-                    Vous serez notifié dès qu'un capitaine publie à {profile?.city || 'SAFI'}.
+                    🔔 لا توجد عروض في مدينتك حالياً — فعّل «كل المدن» أو عد لاحقاً. ستتوصل بإشعار فور نشر أي ربّان عرضاً في {profile?.city || 'SAFI'}.
                   </Typography>
                 </Paper>
               )}
               {visibleOffers.length === 0 ? (
-                <Empty state={isMarin ? 'Aucune offre disponible pour le moment.' : 'Vous n\'avez pas encore publié d\'offre.'} />
+                <Empty state={isMarin ? 'لا توجد عروض متاحة حالياً.' : 'لم تنشر أي عرض بعد.'} />
               ) : (
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 2.5 }}>
                   {visibleOffers.map(offer => (
@@ -334,7 +355,7 @@ export default function Dashboard() {
           {tab === 'applications' && (
             <>
               {myApplications.length === 0 ? (
-                <Empty state="Vous n'avez pas encore postulé." />
+                <Empty state="لم تتقدم بعد لأي عرض." />
               ) : (
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 2.5 }}>
                   {myApplications.map(app => (
@@ -342,20 +363,20 @@ export default function Dashboard() {
                       <Stack spacing={1.5}>
                         <Chip
                           size="small"
-                          label={app.job_offers?.specialty_needed}
+                          label={SPECIALTY_LABELS[app.job_offers?.specialty_needed] || app.job_offers?.specialty_needed}
                           sx={{ alignSelf: 'flex-start' }}
                           color="primary"
                           variant="outlined"
                         />
                         <Typography variant="h6">{app.job_offers?.title}</Typography>
                         <Typography color="text.secondary" fontSize={13}>
-                          📍 {app.job_offers?.location} · {app.job_offers?.start_date} → {app.job_offers?.end_date}
+                          📍 {app.job_offers?.location} · {app.job_offers?.start_date} ← {app.job_offers?.end_date}
                         </Typography>
                         <Box>
                           <Chip
                             size="small"
                             color={app.status === 'accepted' ? 'success' : app.status === 'rejected' ? 'error' : 'warning'}
-                            label={app.status === 'accepted' ? 'Accepté ✓' : app.status === 'rejected' ? 'Refusé' : 'En attente'}
+                            label={app.status === 'accepted' ? 'مقبول ✓' : app.status === 'rejected' ? 'مرفوض' : 'قيد الانتظار'}
                             variant="outlined"
                           />
                         </Box>
@@ -383,6 +404,43 @@ export default function Dashboard() {
   )
 }
 
+function PaymentPanel({ payments, lastPayment, pendingCount }) {
+  return (
+    <Paper
+      sx={{
+        p: 2,
+        mb: 3,
+        borderRadius: 2,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 2,
+        alignItems: 'center',
+        border: '1px solid rgba(245,158,11,.25)',
+      }}
+    >
+      <PaymentsIcon sx={{ color: 'warning.main' }} />
+      <Box sx={{ flexGrow: 1, minWidth: 200 }}>
+        <Typography fontWeight={700}>اشتراكي الشهري</Typography>
+        {lastPayment ? (
+          <Typography color="text.secondary" fontSize={13}>
+            {new Date(lastPayment.month).toLocaleDateString('ar', { month: 'long', year: 'numeric' })} —{' '}
+            {lastPayment.amount_mad} {CURRENCY} ·{' '}
+            <Chip
+              size="small"
+              color={lastPayment.status === 'paid' ? 'success' : 'warning'}
+              label={PAYMENT_STATUS_LABELS[lastPayment.status]}
+              sx={{ height: 20, fontSize: 11, mx: 0.5 }}
+            />
+          </Typography>
+        ) : (
+          <Typography color="text.secondary" fontSize={13}>لا توجد مدفوعات مسجلة بعد.</Typography>
+        )}
+      </Box>
+      <Chip label={`مبالغ غير مؤداة: ${pendingCount}`} color={pendingCount ? 'warning' : 'success'} variant="outlined" size="small" />
+    </Paper>
+  )
+}
+
 function Empty({ state }) {
   return (
     <Paper sx={{ textAlign: 'center', py: 10, borderRadius: 3 }}>
@@ -394,6 +452,7 @@ function Empty({ state }) {
 
 function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
   const company = offer.profiles?.company_name || offer.profiles?.full_name
+  const specialty = SPECIALTY_LABELS[offer.specialty_needed] || offer.specialty_needed
   return (
     <Card
       className={offer.inCity ? 'city-card' : 'match-fade'}
@@ -406,11 +465,11 @@ function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Chip size="small" label={offer.specialty_needed} color={offer.specialty_needed === 'Capitaine' ? 'secondary' : 'info'} />
+        <Chip size="small" label={specialty} color={offer.specialty_needed === 'Marin' ? 'info' : 'secondary'} />
         <Chip
           size="small"
           color={offer.urgency === 'urgent' ? 'error' : 'default'}
-          label={offer.urgency === 'urgent' ? '🔴 Urgent' : 'Standard'}
+          label={offer.urgency === 'urgent' ? '🔴 عاجل' : 'عادي'}
           variant={offer.urgency === 'urgent' ? 'filled' : 'outlined'}
         />
       </Box>
@@ -421,10 +480,10 @@ function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
       <Stack spacing={0.4} sx={{ fontSize: 13, color: 'text.secondary' }}>
         <Box>
           📍 {offer.location}
-          {offer.inCity && <Chip size="small" color="primary" label="Votre ville" sx={{ ml: 1, height: 20, fontSize: 11 }} />}
+          {offer.inCity && <Chip size="small" color="primary" label="مدينتك" sx={{ ml: 1, height: 20, fontSize: 11 }} />}
         </Box>
-        <Box>📅 {offer.start_date} → {offer.end_date}</Box>
-        <Box>💰 {offer.daily_rate ? `${offer.daily_rate} €/jour` : 'Négociable'}</Box>
+        <Box>📅 {offer.start_date} ← {offer.end_date}</Box>
+        <Box>💰 {offer.daily_rate ? `${offer.daily_rate} ${CURRENCY}/يوم` : 'قابل للتفاوض'}</Box>
       </Stack>
 
       <Typography color="text.secondary" fontSize={13} sx={{ opacity: 0.85 }}>
@@ -435,19 +494,19 @@ function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
         {isMarin ? (
           applied ? (
             <Button fullWidth variant="outlined" color="success" disabled>
-              ✓ Candidature envoyée
+              ✓ تم إرسال الطلب
             </Button>
           ) : (
             <Button fullWidth variant="contained" onClick={onApply}>
-              Postuler
+              تقدم للعرض
             </Button>
           )
         ) : (
           <Button component={Link} to={`/offer/${offer.id}`} fullWidth variant="contained" color="secondary">
-            Voir les candidatures
+            عرض الطلبات
           </Button>
         )}
-        <IconButton component={Link} to={`/offer/${offer.id}`} size="small" aria-label="détails">
+        <IconButton component={Link} to={`/offer/${offer.id}`} size="small" aria-label="التفاصيل">
           <WhereToVoteIcon />
         </IconButton>
       </Box>
