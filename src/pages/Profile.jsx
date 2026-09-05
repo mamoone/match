@@ -28,6 +28,7 @@ export default function Profile() {
     const updates = {
       full_name: form.full_name,
       phone: form.phone,
+      city: form.city?.trim() || 'SAFI',
       specialty: form.role === 'marin' ? form.specialty : null,
       company_name: form.role === 'capitaine' ? form.company_name : null,
       experience_years: form.experience_years ? Number(form.experience_years) : null,
@@ -89,6 +90,15 @@ export default function Profile() {
               value={form.email}
               disabled
               fullWidth
+            />
+
+            <TextField
+              label="Ville / Port d'attache"
+              value={form.city || 'SAFI'}
+              onChange={e => update('city', e.target.value)}
+              fullWidth
+              placeholder="SAFI"
+              helperText="Vous recevrez les offres publiées dans cette ville."
             />
 
             <TextField

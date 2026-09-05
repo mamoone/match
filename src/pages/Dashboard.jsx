@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AppBar, Toolbar, Box, Container, Typography, Button, IconButton, Badge,
-  Card, CardContent, Chip, Stack, Paper, Menu, MenuItem, Divider,
-  Avatar, Tab, Tabs, Alert, Snackbar,
+  Card, Chip, Stack, Paper, Menu, MenuItem, Divider,
+  Tab, Tabs, Alert, Snackbar, ToggleButton, ToggleButtonGroup,
 } from '@mui/material'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import AddIcon from '@mui/icons-material/Add'
@@ -12,9 +12,11 @@ import WhereToVoteIcon from '@mui/icons-material/WhereToVote'
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import PersonIcon from '@mui/icons-material/Person'
+import FmdGoodIcon from '@mui/icons-material/FmdGood'
 import { supabase } from '../utils/supabase'
 import { useAuth, Logo } from '../App'
-import { OFFER_STATUS_LABELS } from '../utils/constants'
+
+const POLL_MS = 15000
 
 export default function Dashboard() {
   const { session, profile, signOut } = useAuth()
@@ -22,16 +24,53 @@ export default function Dashboard() {
   const [myApplications, setMyApplications] = useState([])
   const [notifications, setNotifications] = useState([])
   const [tab, setTab] = useState('offers')
+  const [cityFilter, setCityFilter] = useState('city')
   const [notifAnchor, setNotifAnchor] = useState(null)
   const [toast, setToast] = useState('')
+  const [lastSync, setLastSync] = useState(null)
 
   const isMarin = profile?.role === 'marin'
   const unreadCount = notifications.filter(n => !n.read).length
+
+  const fetchOffers = useCallback(async () => {
+    const query = supabase
+      .from('job_offers')
+      .select('*, profiles!job_offers_posted_by_fkey(full_name, company_name)')
+      .order('created_at', { ascending: false })
+    if (isMarin) {
+      const { data } = await query.eq('status', 'open')
+      setOffers(data || [])
+    } else {
+      const { data } = await query.eq('posted_by', session.user.id)
+      setOffers(data || [])
+    }
+  }, [isMarin, session?.user?.id])
+
+  const fetchMyApplications = useCallback(async () => {
+    const { data } = await supabase
+      .from('applications')
+      .select('*, job_offers(*)')
+      .eq('worker_id', session.user.id)
+      .order('created_at', { ascending: false })
+    setMyApplications(data || [])
+  }, [session?.user?.id])
+
+  const fetchNotifications = useCallback(async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    setNotifications(data || [])
+  }, [session?.user?.id])
 
   useEffect(() => {
     fetchOffers()
     if (isMarin) fetchMyApplications()
     fetchNotifications()
+    setLastSync(new Date())
+
     const channel = supabase
       .channel('notifications')
       .on('postgres_changes', {
@@ -46,40 +85,26 @@ export default function Dashboard() {
           new Notification('Match', { body: payload.new.message })
         }
       })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'job_offers',
+      }, () => fetchOffers())
       .subscribe()
+
+    const poll = setInterval(() => {
+      fetchOffers()
+      if (isMarin) fetchMyApplications()
+      fetchNotifications()
+      setLastSync(new Date())
+    }, POLL_MS)
+
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission()
     }
-    return () => supabase.removeChannel(channel)
-  }, [profile])
 
-  async function fetchOffers() {
-    const { data } = await supabase
-      .from('job_offers')
-      .select('*, profiles!job_offers_posted_by_fkey(full_name, company_name)')
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
-    setOffers(data || [])
-  }
-
-  async function fetchMyApplications() {
-    const { data } = await supabase
-      .from('applications')
-      .select('*, job_offers(*)')
-      .eq('worker_id', session.user.id)
-      .order('created_at', { ascending: false })
-    setMyApplications(data || [])
-  }
-
-  async function fetchNotifications() {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
-    setNotifications(data || [])
-  }
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
+  }, [fetchOffers, fetchMyApplications, fetchNotifications, isMarin, session.user.id])
 
   async function applyToOffer(offerId) {
     const { error } = await supabase.from('applications').insert({
@@ -108,9 +133,25 @@ export default function Dashboard() {
     setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)))
   }
 
-  function toggleNotifMenu(e) {
-    setNotifAnchor(e.currentTarget)
-  }
+  const city = (profile?.city || 'SAFI').toLowerCase()
+
+  const visibleOffers = isMarin
+    ? offers
+        .map(o => ({
+          ...o,
+          inCity:
+            o.location.toLowerCase().includes(city) ||
+            city.includes(o.location.toLowerCase()),
+        }))
+        .filter(o => cityFilter === 'all' || o.inCity)
+        .sort((a, b) =>
+          (b.inCity - a.inCity) ||
+          ((a.urgency === 'urgent' ? -1 : 1) - (b.urgency === 'urgent' ? -1 : 1)) ||
+          (new Date(b.created_at) - new Date(a.created_at))
+        )
+    : offers
+
+  const canPost = profile?.role === 'capitaine'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -121,15 +162,16 @@ export default function Dashboard() {
 
           <Chip
             size="small"
-            value={profile?.role}
-            label={profile?.role === 'capitaine' ? profile?.company_name || 'Capitaine' : profile?.specialty || 'Marin'}
-            color={profile?.role === 'marin' ? 'primary' : 'secondary'}
-            sx={{ display: { xs: 'none', sm: 'flex' } }}
+            icon={<FmdGoodIcon />}
+            label={profile?.city || 'SAFI'}
+            sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+            color="default"
+            variant="outlined"
           />
 
           {isMarin && (
             <>
-              <IconButton color="inherit" onClick={toggleNotifMenu} aria-label="notifications">
+              <IconButton color="inherit" onClick={e => setNotifAnchor(e.currentTarget)} aria-label="notifications">
                 <Badge badgeContent={unreadCount} color="error">
                   <NotificationsIcon />
                 </Badge>
@@ -141,8 +183,13 @@ export default function Dashboard() {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 PaperProps={{ sx: { width: 340, maxHeight: 400, mt: 1 } }}
               >
-                <Box sx={{ px: 2, py: 1 }}>
+                <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography fontWeight={700}>Notifications</Typography>
+                  {lastSync && (
+                    <Typography variant="caption" color="text.secondary">
+                      {lastSync.toLocaleTimeString('fr')}
+                    </Typography>
+                  )}
                 </Box>
                 <Divider />
                 {notifications.length === 0 && (
@@ -163,7 +210,8 @@ export default function Dashboard() {
                     <Box sx={{ py: 0.5 }}>
                       <Typography fontSize={13}>{n.message}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(n.created_at).toLocaleString('fr')}
+                        {new Date(n.created_at).toLocaleTimeString('fr')} ·{' '}
+                        {new Date(n.created_at).toLocaleDateString('fr')}
                       </Typography>
                     </Box>
                   </MenuItem>
@@ -188,51 +236,93 @@ export default function Dashboard() {
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box className="match-fade">
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+          <Paper
+            sx={{
+              p: { xs: 3, sm: 4 },
+              mb: 3,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, rgba(14,165,233,.18), rgba(99,102,241,.22)), #0b1120',
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 2,
+              border: '1px solid rgba(56,189,248,.15)',
+            }}
+          >
             <Box>
-              <Typography variant="h4">
-                {isMarin ? 'Bonjour, ' : 'Bonjour, '}{profile?.full_name}
+              <Typography variant="h4" fontWeight={800}>
+                Bonjour, {profile?.full_name} 👋
               </Typography>
-              <Typography color="text.secondary">
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
                 {isMarin
-                  ? 'Trouvez une mission de remplacement en un clic.'
+                  ? `Offres de remplacement à ${profile?.city || 'SAFI'} — une mission en un clic.`
                   : 'Publiez un besoin urgent, trouvez le bon marin.'}
               </Typography>
             </Box>
-            {!isMarin && (
-              <Button component={Link} to="/create-offer" variant="contained" startIcon={<AddIcon />}>
+            {canPost && (
+              <Button component={Link} to="/create-offer" variant="contained" size="large" startIcon={<AddIcon />}>
                 Nouvelle offre
               </Button>
             )}
-          </Box>
+          </Paper>
 
           {isMarin ? (
-            <Paper sx={{ mb: 3, borderRadius: 2, overflow: 'hidden' }}>
-              <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" textColor="primary" indicatorColor="primary">
-                <Tab icon={<WhereToVoteIcon />} iconPosition="start" label={`Offres (${offers.length})`} value="offers" />
-                <Tab icon={<AssignmentIcon />} iconPosition="start" label={`Mes candidatures (${myApplications.length})`} value="applications" />
-              </Tabs>
-            </Paper>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={cityFilter}
+                onChange={(_e, v) => v && setCityFilter(v)}
+              >
+                <ToggleButton value="city">📍 Ma ville ({profile?.city || 'SAFI'})</ToggleButton>
+                <ToggleButton value="all">Toutes les villes</ToggleButton>
+              </ToggleButtonGroup>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                <span className="live-dot" /> Actualisé en direct · {lastSync?.toLocaleTimeString('fr')}
+              </Typography>
+            </Box>
           ) : (
-            <Paper sx={{ mb: 3, p: 0.5, borderRadius: 2 }}>
-              <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" textColor="primary" indicatorColor="primary">
-                <Tab icon={<WhereToVoteIcon />} iconPosition="start" label="Mes offres" value="offers" />
-              </Tabs>
-            </Paper>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2, textAlign: 'right' }}>
+              <span className="live-dot" /> Actualisé en direct · {lastSync?.toLocaleTimeString('fr')}
+            </Typography>
           )}
+
+          <Paper sx={{ mb: 3, borderRadius: 2, overflow: 'hidden' }}>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" textColor="primary" indicatorColor="primary">
+              <Tab
+                icon={<WhereToVoteIcon />}
+                iconPosition="start"
+                label={isMarin ? `Offres (${visibleOffers.length})` : `Mes offres (${offers.length})`}
+                value="offers"
+              />
+              {isMarin && (
+                <Tab icon={<AssignmentIcon />} iconPosition="start" label={`Mes candidatures (${myApplications.length})`} value="applications" />
+              )}
+            </Tabs>
+          </Paper>
 
           {tab === 'offers' && (
             <>
-              {offers.length === 0 ? (
-                <Empty state="Aucune offre disponible pour le moment." />
+              {isMarin && cityFilter === 'city' && !visibleOffers.some(o => o.inCity) && (
+                <Paper sx={{ px: 2.5, py: 1.5, mb: 2, borderRadius: 2, bgcolor: 'rgba(99,102,241,.08)' }}>
+                  <Typography fontSize={13} color="text.secondary">
+                    🔔 Aucune offre dans votre ville pour l'instant — activez « Toutes les villes » ou comparez plus tard.
+                    Vous serez notifié dès qu'un capitaine publie à {profile?.city || 'SAFI'}.
+                  </Typography>
+                </Paper>
+              )}
+              {visibleOffers.length === 0 ? (
+                <Empty state={isMarin ? 'Aucune offre disponible pour le moment.' : 'Vous n\'avez pas encore publié d\'offre.'} />
               ) : (
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 2.5 }}>
-                  {offers.map(offer => (
+                  {visibleOffers.map(offer => (
                     <OfferCard
                       key={offer.id}
                       offer={offer}
                       isMarin={isMarin}
                       applied={myApplications.some(a => a.offer_id === offer.id)}
+                      showCity={cityFilter === 'all'}
                       onApply={() => applyToOffer(offer.id)}
                     />
                   ))}
@@ -302,10 +392,19 @@ function Empty({ state }) {
   )
 }
 
-function OfferCard({ offer, isMarin, applied, onApply }) {
+function OfferCard({ offer, isMarin, applied, showCity, onApply }) {
   const company = offer.profiles?.company_name || offer.profiles?.full_name
   return (
-    <Card className="match-fade" sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    <Card
+      className={offer.inCity ? 'city-card' : 'match-fade'}
+      sx={{
+        p: 2.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.5,
+        ...(offer.inCity ? { border: '1px solid rgba(56,189,248,.4)' } : {}),
+      }}
+    >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Chip size="small" label={offer.specialty_needed} color={offer.specialty_needed === 'Capitaine' ? 'secondary' : 'info'} />
         <Chip
@@ -320,7 +419,10 @@ function OfferCard({ offer, isMarin, applied, onApply }) {
       <Typography color="text.secondary" fontSize={13}>⛴️ {company}</Typography>
 
       <Stack spacing={0.4} sx={{ fontSize: 13, color: 'text.secondary' }}>
-        <Box>📍 {offer.location}</Box>
+        <Box>
+          📍 {offer.location}
+          {offer.inCity && <Chip size="small" color="primary" label="Votre ville" sx={{ ml: 1, height: 20, fontSize: 11 }} />}
+        </Box>
         <Box>📅 {offer.start_date} → {offer.end_date}</Box>
         <Box>💰 {offer.daily_rate ? `${offer.daily_rate} €/jour` : 'Négociable'}</Box>
       </Stack>

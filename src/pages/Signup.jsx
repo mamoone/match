@@ -13,7 +13,7 @@ export default function Signup() {
   const { fetchProfile } = useAuth()
   const [form, setForm] = useState({
     full_name: '', email: '', password: '', phone: '',
-    role: 'marin', company_name: '',
+    role: 'marin', company_name: '', city: 'SAFI',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,7 +29,7 @@ export default function Signup() {
     const { data, error: authError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: { data: { full_name: form.full_name, phone: form.phone } },
+      options: { data: { full_name: form.full_name, phone: form.phone, city: form.city || 'SAFI' } },
     })
 
     if (authError) { setError(authError.message); setLoading(false); return }
@@ -43,6 +43,7 @@ export default function Signup() {
         role: form.role,
         specialty: form.role === 'marin' ? 'Marin' : 'Capitaine',
         company_name: form.role === 'capitaine' ? form.company_name : null,
+        city: form.city?.trim() || 'SAFI',
       })
       if (profileError) { setError(profileError.message); setLoading(false); return }
       await fetchProfile(data.user.id)
@@ -95,6 +96,15 @@ export default function Signup() {
           <TextField label="Nom complet" value={form.full_name} onChange={e => update('full_name', e.target.value)} required fullWidth />
           <TextField label="Email" type="email" value={form.email} onChange={e => update('email', e.target.value)} required fullWidth />
           <TextField label="Téléphone" type="tel" value={form.phone} onChange={e => update('phone', e.target.value)} required fullWidth />
+          <TextField
+            label="Ville / Port d'attache"
+            value={form.city}
+            onChange={e => update('city', e.target.value)}
+            required
+            fullWidth
+            placeholder="SAFI"
+            helperText="Vous recevrez les offres publiées dans cette ville."
+          />
           <TextField label="Mot de passe" type="password" value={form.password} onChange={e => update('password', e.target.value)} required fullWidth inputProps={{ minLength: 6 }} />
 
           {form.role === 'capitaine' && (

@@ -103,6 +103,7 @@ export default function Admin() {
                   <TableRow>
                     <TableCell>Utilisateur</TableCell>
                     <TableCell>Rôle</TableCell>
+                    <TableCell>Ville</TableCell>
                     <TableCell>Spécialité / Société</TableCell>
                     <TableCell>Inscrit le</TableCell>
                     <TableCell align="right">Actions</TableCell>
@@ -129,6 +130,7 @@ export default function Admin() {
                           label={ROLE_BADGES[u.role]?.label || u.role}
                         />
                       </TableCell>
+                      <TableCell>{u.city || 'SAFI'}</TableCell>
                       <TableCell>{u.specialty || u.company_name || '-'}</TableCell>
                       <TableCell>{new Date(u.created_at).toLocaleDateString('fr')}</TableCell>
                       <TableCell align="right">
