@@ -8,4 +8,5 @@ dist/
 *.iml
 
 # OS
-.DS_Store
+.DS_Storesupabase/.temp/
+supabase/.temp*
